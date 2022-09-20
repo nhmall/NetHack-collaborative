@@ -17,3 +17,10 @@ interface may need to be adapted for each of the following:
 -   Qt 5 or greater
 
 -   DOS
+
+Code that results from these collaborations is intended to eventually
+be merged into the upstream NetHack repository.
+
+Interested in contributing as a collaborator? Please do contact us!
+
+
