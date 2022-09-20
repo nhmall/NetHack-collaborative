@@ -1,4 +1,4 @@
-There are some features that some would like to see improved or added in
+There are features that some would like to see improved or added in
 NetHack and we agree with several of them. Sometimes they need testing
 and further refinement. Sometimes they require porting to multiple
 platforms or windowing systems.
