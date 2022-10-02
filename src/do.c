@@ -761,7 +761,7 @@ engulfer_digests_food(struct obj *obj)
        corpse, glob, or meat <item> but not other types of food */
     if (digests(u.ustuck->data)
         && (obj->otyp == CORPSE || obj->globby
-            || obj->otyp == MEATBALL || obj->otyp == HUGE_CHUNK_OF_MEAT
+            || obj->otyp == MEATBALL || obj->otyp == ENORMOUS_MEATBALL
             || obj->otyp == MEAT_RING || obj->otyp == MEAT_STICK)) {
         boolean could_petrify = FALSE,
                 could_poly = FALSE, could_slime = FALSE,
@@ -979,7 +979,8 @@ menu_drop(int retry)
                 if (!otmp2 || !otmp2->bypass)
                     continue;
                 /* found next selected invent item */
-                n_dropped += ((menudrop_split(otmp, pick_list[i].count) == ECMD_TIME) ? 1 : 0);
+                n_dropped += (menudrop_split(otmp, pick_list[i].count)
+                              == ECMD_TIME) ? 1 : 0;
             }
             bypass_objlist(g.invent, FALSE); /* reset g.invent to normal */
             free((genericptr_t) pick_list);
@@ -1099,7 +1100,9 @@ dodown(void)
             if (flags.autodig && !g.context.nopick && uwep && is_pick(uwep)) {
                 return use_pick_axe2(uwep);
             } else {
-                You_cant("go down here.");
+                You_cant("go down here%s.",
+                         (trap && trap->ttyp == VIBRATING_SQUARE) ? " yet"
+                                                                  : "");
                 return ECMD_OK;
             }
         }
@@ -1145,8 +1148,11 @@ dodown(void)
     }
     if (trap && Is_stronghold(&u.uz)) {
         goto_hell(FALSE, TRUE);
-    } else if (trap) {
-        goto_level(&(trap->dst), FALSE, FALSE, FALSE);
+    } else if (trap && trap->dst.dlevel != -1) {
+        d_level tdst;
+        assign_level(&tdst, &(trap->dst));
+        (void) clamp_hole_destination(&tdst);
+        goto_level(&tdst, FALSE, FALSE, FALSE);
     } else {
         g.at_ladder = (boolean) (levl[u.ux][u.uy].typ == LADDER);
         next_level(!trap);
@@ -1819,7 +1825,7 @@ goto_level(
 
     /* fall damage? */
     if (do_fall_dmg) {
-        int dmg = d(dist, 6);
+        int dmg = d(max(dist, 1), 6);
 
         dmg = Maybe_Half_Phys(dmg);
         losehp(dmg, "falling down a mine shaft", KILLED_BY);
