@@ -1,4 +1,4 @@
-HDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.1046 $ $NHDT-Date: 1664616859 2022/10/01 09:34:19 $
+HDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.1049 $ $NHDT-Date: 1664966382 2022/10/05 10:39:42 $
 
 General Fixes and Modified Features
 -----------------------------------
@@ -1042,6 +1042,7 @@ orc hero has maximum 18/50 strength but hero poly'd into an orc got 18/100
 hero with exceptional strength (18/01..18/100) retained that when polymorphed
 	into any monster lacking the strongmonst attribute
 give hero poly'd into a giant 19 strength instead of 18/100
+wait for a response after displaying wishing help; affects X11
 
 
 Fixes to 3.7.0-x Problems that Were Exposed Via git Repository
@@ -1405,6 +1406,8 @@ tipping contents of one container directly into another allowed transferring
 	wands of cancellation and bags of holding or tricks that were inside
 	a sack, box, or chest into a bag of holding without blowing it up
 prevent random traps from being created inside the shops in the tourist quest
+if hero's steed got hit by knockback effect, impossible "no monster to remove"
+	would occur (plus more warnings if 'sanity_check' was On)
 
 curses: 'msg_window' option wasn't functional for curses unless the binary
 	also included tty support
