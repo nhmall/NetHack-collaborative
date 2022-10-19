@@ -192,6 +192,7 @@ adjattrib(
     return TRUE;
 }
 
+/* strength gain */
 void
 gainstr(struct obj *otmp, int incr, boolean givemsg)
 {
@@ -209,31 +210,65 @@ gainstr(struct obj *otmp, int incr, boolean givemsg)
                      givemsg ? -1 : 1);
 }
 
-/* may kill you; cause may be poison or monster like 'a' */
+/* strength loss, may kill you; cause may be poison or monster like 'a' */
 void
-losestr(int num)
+losestr(int num, const char *knam, schar k_format)
 {
     int uhpmin = minuhpmax(1), olduhpmax = u.uhpmax;
-    int ustr = ABASE(A_STR) - num;
+    int ustr = ABASE(A_STR) - num, amt, dmg;
+    boolean waspolyd = Upolyd;
 
-    while (ustr < 3) {
+    if (num <= 0 || ABASE(A_STR) < ATTRMIN(A_STR)) {
+        impossible("losestr: %d - %d", ABASE(A_STR), num);
+        return;
+    }
+    dmg = 0;
+    while (ustr < ATTRMIN(A_STR)) {
         ++ustr;
         --num;
+        amt = rn1(4, 3); /* (0..(4-1))+3 => 3..6; used to use flat 6 here */
+        dmg += amt;
+    }
+    if (dmg) {
+        /* in case damage is fatal and caller didn't supply killer reason */
+        if (!knam || !*knam) {
+            knam = "terminal frailty";
+            k_format = KILLED_BY;
+        }
+        losehp(dmg, knam, k_format);
+
         if (Upolyd) {
-            u.mh -= 6;
-            u.mhmax -= 6;
-        } else {
-            u.uhp -= 6;
-            setuhpmax(u.uhpmax - 6);
+            /* if still polymorhed, reduce you-as-monst maxHP; never below 1 */
+            u.mhmax -= min(dmg, u.mhmax - 1);
+        } else if (!waspolyd) {
+            /* not polymorphed now and didn't rehumanize when taking damage;
+               reduce max HP, but not below below uhpmin */
+            if (u.uhpmax > uhpmin)
+                setuhpmax(max(u.uhpmax - dmg, uhpmin));
         }
         g.context.botl = TRUE;
     }
-    if (u.uhpmax < uhpmin) {
+#if 0   /* only possible if uhpmax was already less than uhpmin */
+    if (!Upolyd && u.uhpmax < uhpmin) {
         setuhpmax(min(olduhpmax, uhpmin));
         if (!Drain_resistance)
             losexp(NULL); /* won't be fatal when no 'drainer' is supplied */
     }
-    (void) adjattrib(A_STR, -num, 1);
+#else
+    nhUse(olduhpmax);
+#endif
+    /* 'num' chould have been reduced to 0 in the minimum strength loop;
+       '(Upolyd || !waspolyd)' is True unless damage caused rehumanization */
+    if (num > 0 && (Upolyd || !waspolyd))
+        (void) adjattrib(A_STR, -num, 1);
+}
+
+/* combined strength loss and damage from some poisons */
+void
+poison_strdmg(int strloss, int dmg, const char *knam, schar k_format)
+{
+    losestr(strloss, knam, k_format);
+    losehp(dmg, knam, k_format);
 }
 
 static const struct poison_effect_message {
@@ -273,11 +308,12 @@ poisontell(int typ,         /* which attribute */
 
 /* called when an attack or trap has poisoned hero (used to be in mon.c) */
 void
-poisoned(const char *reason,    /* controls what messages we display */
-         int typ,
-         const char *pkiller,   /* for score+log file if fatal */
-         int fatal,             /* if fatal is 0, limit damage to adjattrib */
-         boolean thrown_weapon) /* thrown weapons are less deadly */
+poisoned(
+    const char *reason,    /* controls what messages we display */
+    int typ,
+    const char *pkiller,   /* for score+log file if fatal */
+    int fatal,             /* if fatal is 0, limit damage to adjattrib */
+    boolean thrown_weapon) /* thrown weapons are less deadly */
 {
     int i, loss, kprefix = KILLED_BY_AN;
     boolean blast = !strcmp(reason, "blast");

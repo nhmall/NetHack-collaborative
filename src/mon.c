@@ -5176,5 +5176,4 @@ check_gear_next_turn(struct monst *mon)
 {
     mon->misc_worn_check |= I_SPECIAL;
 }
-
 /*mon.c*/

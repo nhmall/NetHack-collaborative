@@ -114,7 +114,8 @@ extern struct obj *has_magic_key(struct monst *);
 
 extern boolean adjattrib(int, int, int);
 extern void gainstr(struct obj *, int, boolean);
-extern void losestr(int);
+extern void losestr(int, const char *, schar);
+extern void poison_strdmg(int, int, const char *, schar);
 extern void poisontell(int, boolean);
 extern void poisoned(const char *, int, const char *, int, boolean);
 extern void change_luck(schar);
@@ -775,6 +776,7 @@ extern void set_tin_variety(struct obj *, int);
 extern int tin_variety_txt(char *, int *);
 extern void tin_details(struct obj *, int, char *);
 extern boolean Popeye(int);
+extern int Finish_digestion(void);
 
 /* ### end.c ### */
 
@@ -807,7 +809,7 @@ extern void cant_reach_floor(coordxy, coordxy, boolean, boolean);
 extern const char *surface(coordxy, coordxy);
 extern const char *ceiling(coordxy, coordxy);
 extern struct engr *engr_at(coordxy, coordxy);
-extern boolean sengr_at(const char *, coordxy, coordxy, boolean);
+extern struct engr *sengr_at(const char *, coordxy, coordxy, boolean);
 extern void u_wipe_engr(int);
 extern void wipe_engr_at(coordxy, coordxy, xint16, boolean);
 extern void read_engr_at(coordxy, coordxy);
@@ -976,7 +978,7 @@ extern int monster_nearby(void);
 extern void end_running(boolean);
 extern void nomul(int);
 extern void unmul(const char *);
-extern void losehp(int, const char *, boolean);
+extern void losehp(int, const char *, schar);
 extern int weight_cap(void);
 extern int inv_weight(void);
 extern int near_capacity(void);
@@ -1311,6 +1313,9 @@ extern const char *do_runtime_info(int *);
 extern void release_runtime_info(void);
 #ifdef ENHANCED_SYMBOLS
 extern void dump_glyphids(void);
+#endif
+#if (NH_DEVEL_STATUS != NH_STATUS_RELEASED) || defined(DEBUG)
+extern int mstrength(struct permonst *);
 #endif
 
 /* ### mhitm.c ### */
@@ -2147,6 +2152,7 @@ extern void change_sex(void);
 extern void livelog_newform(boolean, int, int);
 extern void polyself(int);
 extern int polymon(int);
+extern schar uasmon_maxStr(void);
 extern void rehumanize(void);
 extern int dobreathe(void);
 extern int dospit(void);
@@ -2393,14 +2399,15 @@ extern void rigid_role_checks(void);
 extern boolean setrolefilter(const char *);
 extern boolean gotrolefilter(void);
 extern void clearrolefilter(void);
-extern char *build_plselection_prompt(char *, int, int, int, int, int);
 extern char *root_plselection_prompt(char *, int, int, int, int, int);
+extern char *build_plselection_prompt(char *, int, int, int, int, int);
 extern void plnamesuffix(void);
 extern void role_selection_prolog(int, winid);
 extern void role_menu_extra(int, winid, boolean);
 extern void role_init(void);
 extern const char *Hello(struct monst *);
 extern const char *Goodbye(void);
+extern const struct Race *character_race(short);
 
 /* ### rumors.c ### */
 
@@ -3032,9 +3039,9 @@ extern boolean glyphid_cache_status(void);
 extern int glyphrep_to_custom_map_entries(const char *op, int *glyph);
 void free_all_glyphmap_u(void);
 int add_custom_urep_entry(const char *symset_name, int glyphidx,
-                          const uint8 *utf8str, long ucolor,
+                          uint32 utf32ch, const uint8 *utf8str, long ucolor,
                           enum graphics_sets which_set);
-int set_map_u(glyph_map *gm, const uint8 *utf8str, long ucolor);
+int set_map_u(glyph_map *gm, uint32 utf32ch, const uint8 *utf8str, long ucolor);
 #endif /* ENHANCED_SYMBOLS */
 
 /* ### vault.c ### */
