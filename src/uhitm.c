@@ -1306,6 +1306,8 @@ hmon_hitmon(
         tmp = (get_dmg_bonus && !mon_is_shade) ? 1 : 0;
         if (mon_is_shade && !hittxt
             && thrown != HMON_THROWN && thrown != HMON_KICKED)
+            /* this gives "harmlessly passes through" feedback even when
+               hero doesn't see it happen; presumably sensed by touch? */
             hittxt = shade_miss(&g.youmonst, mon, obj, FALSE, TRUE);
     }
 
@@ -1591,8 +1593,12 @@ shade_aware(struct obj *obj)
 /* used for hero vs monster and monster vs monster; also handles
    monster vs hero but that won't happen because hero can't be a shade */
 boolean
-shade_miss(struct monst *magr, struct monst *mdef, struct obj *obj,
-           boolean thrown, boolean verbose)
+shade_miss(
+    struct monst *magr,
+    struct monst *mdef,
+    struct obj *obj,
+    boolean thrown,
+    boolean verbose)
 {
     const char *what, *whose, *target;
     boolean youagr = (magr == &g.youmonst), youdef = (mdef == &g.youmonst);
@@ -3427,8 +3433,9 @@ do_stone_mon(struct monst *magr, struct attack *mattk UNUSED,
 }
 
 void
-mhitm_ad_phys(struct monst *magr, struct attack *mattk, struct monst *mdef,
-              struct mhitm_data *mhm)
+mhitm_ad_phys(
+    struct monst *magr, struct attack *mattk,
+    struct monst *mdef, struct mhitm_data *mhm)
 {
     struct permonst *pa = magr->data;
     struct permonst *pd = mdef->data;
@@ -3556,11 +3563,12 @@ mhitm_ad_phys(struct monst *magr, struct attack *mattk, struct monst *mdef,
     } else {
         /* mhitm */
         struct obj *mwep = MON_WEP(magr);
+        boolean vis = canseemon(magr) && canseemon(mdef);
 
         if (mattk->aatyp != AT_WEAP && mattk->aatyp != AT_CLAW)
             mwep = 0;
 
-        if (shade_miss(magr, mdef, mwep, FALSE, TRUE)) {
+        if (shade_miss(magr, mdef, mwep, FALSE, vis)) {
             mhm->damage = 0;
         } else if (mattk->aatyp == AT_KICK && thick_skinned(pd)) {
             /* [no 'kicking boots' check needed; monsters with kick attacks
@@ -4603,19 +4611,32 @@ missum(
         wakeup(mdef, TRUE);
 }
 
+/* check whether equipment protects against knockback */
 static boolean
 m_is_steadfast(struct monst *mtmp)
 {
     boolean is_u = (mtmp == &g.youmonst);
     struct obj *otmp = is_u ? uwep : MON_WEP(mtmp);
 
-    /* must be on the ground */
-    if (is_u ? (Flying || Levitation)
-             : (is_flyer(mtmp->data) || is_floater(mtmp->data)))
+    /* must be on the ground (or in water) */
+    if ((is_u ? (Flying || Levitation)
+              : (is_flyer(mtmp->data) || is_floater(mtmp->data)))
+        || Is_airlevel(&u.uz) /* air or cloud */
+        || (Is_waterlevel(&u.uz) && !is_pool(u.ux, u.uy))) /* air bubble */
         return FALSE;
 
     if (is_art(otmp, ART_GIANTSLAYER))
         return TRUE;
+
+    /* steadfast if carrying any loadstone (and not floating or flying);
+       'is_u' test not needed here; m_carrying() is 'youmonst' aware */
+    if (m_carrying(mtmp, LOADSTONE))
+        return TRUE;
+    /* when mounted and steed is target of knockback, check the rider for
+       a loadstone too (Giantslayer's protection doesn't extend to steed) */
+    if (u.usteed && mtmp == u.usteed && carrying(LOADSTONE))
+        return TRUE;
+
     return FALSE;
 }
 
@@ -4628,6 +4649,7 @@ mhitm_knockback(
     int *hitflags,        /* modified if magr or mdef dies */
     boolean weapon_used)  /* True: via weapon hit */
 {
+    char magrbuf[BUFSZ], mdefbuf[BUFSZ];
     struct obj *otmp;
     boolean u_agr = (magr == &g.youmonst);
     boolean u_def = (mdef == &g.youmonst);
@@ -4672,12 +4694,21 @@ mhitm_knockback(
         return FALSE;
 
     /* steadfast defender cannot be pushed around */
-    if (m_is_steadfast(mdef))
+    if (m_is_steadfast(mdef)) {
+        if (u_def || (u.usteed && mdef == u.usteed)) {
+            mdefbuf[0] = '\0';
+            if (u.usteed)
+                Snprintf(mdefbuf, sizeof mdefbuf, "and %s ",
+                         y_monnam(u.usteed));
+            You("%sdon't budge.", mdefbuf);
+        } else if (canseemon(mdef)) {
+            pline("%s doesn't budge.", Monnam(mdef));
+        }
         return FALSE;
+    }
 
     /* give the message */
     if (u_def || canseemon(mdef)) {
-        char magrbuf[BUFSZ], mdefbuf[BUFSZ];
         boolean dosteed = u_def && u.usteed;
 
         Strcpy(magrbuf, u_agr ? "You" : Monnam(magr));

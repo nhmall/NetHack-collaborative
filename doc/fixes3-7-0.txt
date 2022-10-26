@@ -974,7 +974,8 @@ bigroom variant 2 may have ice floor in unlit areas
 some large monsters can knock back smaller monsters with a hit
 change Demonbane to a mace, make it the first sac gift for priests,
 	and give it an invoke ability to banish demons
-wielding Giantslayer prevents knockback from larger monsters
+wielding Giantslayer prevents knockback from larger monsters; likewise for
+	carried loadstone(s)
 scared hostile monster which cannot move away will attack
 prevent a fog cloud that has engulfed the hero from moving under closed doors
 allow cutting a known spider web with wielded weapon by force-fighting the web
@@ -1045,6 +1046,10 @@ give hero poly'd into a giant 19 strength instead of 18/100
 wait for a response after displaying wishing help; affects X11
 guardian nagas' constriction attack could never hit because the two preceding
 	attacks must both hit and those were mutually exclusive: bite and spit
+explicitly throwing 1 for non-gold stack of more than 1 and then canceling at
+	direction prompt left a pair of stacks of 1 and N-1 with same invlet
+some attack damage which shouldn't affect shades operated as intended when
+	hero could see it happen but erroneously affected them when not seen
 
 
 Fixes to 3.7.0-x Problems that Were Exposed Via git Repository
@@ -1660,6 +1665,8 @@ X11: with 'slow' resource set to False, the pop up yn_function didn't always
 X11: (possibly X11+OSX): if persistent inventory was displayed at time of
 	end-of-game prompting, prompting would stall until that window was
 	manually dismissed
+X11: (possibly X11+OSX): try harder to resize the getlin() prompt, if needed,
+	when prompt text changes
 X11: set all selectable menu lines to the same length, left justified
 X11: initializing the get-extended-command widget modified memory beyond what
 	it dynamically allocated
@@ -1859,6 +1866,7 @@ experimental #saveoptions command to allow saving configuration settings
 mouse buttons can be bound to extended commands
 hero poly'd into purple worm can gain intrinsics from digesting whole monster
 add some tins of spinach to monk's quest (vegan => no Str from giant corpses)
+very large humanoids can wear mummy wrappings
 
 
 Platform- and/or Interface-Specific New Features
@@ -2029,6 +2037,7 @@ from xNetHack:  better handling for monsters putting on equipment; fixes
 	issue #843:  "Mon dies.  Mon puts on <armor>.  The seemingly dead Mon
 	rises as a vampire."
 provide Unicode support to DOS Curses port (pr #889 by chasonr)
+Support Unicode on Win32 (pr #903 by chasonr)
 
 
 Code Cleanup and Reorganization

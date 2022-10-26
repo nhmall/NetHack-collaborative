@@ -729,14 +729,17 @@ basics_enlightenment(int mode UNUSED, int final)
             Sprintf(buf, " Your wallet contain%s %ld %s", !final ? "s" : "ed",
                     umoney, currency(umoney));
         }
-        Strcat(buf, hmoney ? "," : ".");
+        /* terminate the wallet line if appropriate, otherwise add an
+           introduction to subsequent continuation; output now either way */
+        Strcat(buf, !hmoney ? "." : !umoney ? ", but" : ", and");
         enlght_out(buf);
 
+        /* put contained gold on its own line to avoid excessive width; it's
+           phrased as a continuation of the wallet line so not capitalized */
         if (hmoney) {
             Sprintf(buf, "%ld %s stashed away in your pack",
                     hmoney, umoney ? "more" : currency(hmoney));
-            enl_msg(umoney ? "and you " : "but you ", "have ", "had ", buf,
-                    "");
+            enl_msg("you ", "have ", "had ", buf, "");
         }
     }
 
@@ -2632,11 +2635,13 @@ doborn(void)
     putstr(datawin, 0, "died born");
     for (i = LOW_PM; i < NUMMONS; i++)
         if (g.mvitals[i].born || g.mvitals[i].died
-            || (g.mvitals[i].mvflags & G_GONE)) {
+            || (g.mvitals[i].mvflags & G_GONE) != 0) {
             Sprintf(buf, fmt,
                     g.mvitals[i].died, g.mvitals[i].born,
-                    ((g.mvitals[i].mvflags & G_GONE) == G_EXTINCT) ? 'E' :
-                    ((g.mvitals[i].mvflags & G_GONE) == G_GENOD) ? 'G' : ' ',
+                    ((g.mvitals[i].mvflags & G_GONE) == G_EXTINCT) ? 'E'
+                    : ((g.mvitals[i].mvflags & G_GONE) == G_GENOD) ? 'G'
+                      : ((g.mvitals[i].mvflags & G_GONE) != 0) ? 'X'
+                        : ' ',
                     mons[i].pmnames[NEUTRAL]);
             putstr(datawin, 0, buf);
             nborn += g.mvitals[i].born;
@@ -2673,8 +2678,10 @@ list_vanquished(char defquery, boolean ask)
     boolean dumping; /* for DUMPLOG; doesn't need to be conditional */
 
     dumping = (defquery == 'd');
-    if (dumping)
+    if (dumping) {
         defquery = 'y';
+        ask = FALSE; /* redundant; caller passes False with defquery=='d' */
+    }
 
     /* get totals first */
     ntypes = 0;
