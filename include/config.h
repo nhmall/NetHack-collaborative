@@ -53,7 +53,7 @@
  * Some combinations make no sense.  See the installation document.
  */
 #if !defined(NOTTYGRAPHICS)
-#define TTY_GRAPHICS /* good old tty based graphics */
+#define TTY_GRAPHICS /* good old tty-based graphics */
 #endif
 /* #define CURSES_GRAPHICS *//* Curses interface - Karl Garrison*/
 /* #define X11_GRAPHICS */   /* X11 interface */
@@ -277,6 +277,9 @@
  *      uncommented to define NODUMPENUMS. Doing so will disable the
  *          nethack --dumpenums
  *      command line option.
+ *      Note:  the extra memory is also used when ENHANCED_SYMBOLS is
+ *      defined, so defining both ENHANCED_SYMBOLS and NODUMPENUMS will limit
+ *      the amount of memory and code reduction offered by the latter.
  */
 /* #define NODUMPENUMS */
 
