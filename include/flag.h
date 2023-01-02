@@ -87,6 +87,7 @@ struct flag {
     int pile_limit;    /* controls feedback when walking over objects */
     char discosort;    /* order of dodiscovery/doclassdisco output: o,s,c,a */
     char sortloot; /* 'n'=none, 'l'=loot (pickup), 'f'=full ('l'+invent) */
+    uchar vanq_sortmode; /* [uint_8] order of vanquished monsters: 0..7 */
     char inv_order[MAXOCLASSES];
     char pickup_types[MAXOCLASSES];
 #define NUM_DISCLOSURE_OPTIONS 6 /* i,a,v,g,c,o (decl.c) */
@@ -189,7 +190,7 @@ struct debug_flags {
  */
 struct instance_flags {
     boolean debug_fuzzer;  /* fuzz testing */
-    boolean defer_plname;  /* X11 hack: askname() might not set g.plname */
+    boolean defer_plname;  /* X11 hack: askname() might not set gp.plname */
     boolean herecmd_menu;  /* use menu when mouseclick on yourself */
     boolean invis_goldsym; /* gold symbol is ' '? */
     boolean in_lua;        /* executing a lua script */

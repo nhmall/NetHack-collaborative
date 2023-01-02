@@ -275,10 +275,10 @@ typedef struct sortloot_item Loot;
 
 #define MATCH_WARN_OF_MON(mon) \
     (Warn_of_mon                                                        \
-     && ((g.context.warntype.obj & (mon)->data->mflags2) != 0           \
-         || (g.context.warntype.polyd & (mon)->data->mflags2) != 0      \
-         || (g.context.warntype.species                                 \
-             && (g.context.warntype.species == (mon)->data))))
+     && ((gc.context.warntype.obj & (mon)->data->mflags2) != 0           \
+         || (gc.context.warntype.polyd & (mon)->data->mflags2) != 0      \
+         || (gc.context.warntype.species                                 \
+             && (gc.context.warntype.species == (mon)->data))))
 
 typedef uint32_t mmflags_nht;     /* makemon MM_ flags */
 
@@ -415,7 +415,7 @@ typedef uint32_t mmflags_nht;     /* makemon MM_ flags */
 /* Flags to control find_mid() */
 #define FM_FMON 0x01    /* search the fmon chain */
 #define FM_MIGRATE 0x02 /* search the migrating monster chain */
-#define FM_MYDOGS 0x04  /* search g.mydogs */
+#define FM_MYDOGS 0x04  /* search gm.mydogs */
 #define FM_EVERYWHERE (FM_FMON | FM_MIGRATE | FM_MYDOGS)
 
 /* Flags to control pick_[race,role,gend,align] routines in role.c */
@@ -453,6 +453,8 @@ typedef uint32_t mmflags_nht;     /* makemon MM_ flags */
 #define nyaq(query) yn_function(query, ynaqchars, 'n', TRUE)
 #define nyNaq(query) yn_function(query, ynNaqchars, 'n', TRUE)
 #define ynNaq(query) yn_function(query, ynNaqchars, 'y', TRUE)
+/* YN() is same as yn() except doesn't save the response in do-again buffer */
+#define YN(query) yn_function(query, ynchars, 'n', FALSE)
 
 /* Macros for scatter */
 #define VIS_EFFECTS 0x01 /* display visual effects */
@@ -702,20 +704,16 @@ enum optset_restrictions {
 
 /* Cast to int, but limit value to range. */
 #define LIMIT_TO_RANGE_INT(lo, hi, var) \
-    (int) (                             \
-        (var) < (lo) ? (lo) : (         \
-            (var) > (hi) ? (hi) :       \
-            (var)                       \
-        )                               \
-    )
+    ((int) ((var) < (lo) ? (lo) : (var) > (hi) ? (hi) : (var)))
 
-#define ARM_BONUS(obj)                      \
-    (objects[(obj)->otyp].a_ac + (obj)->spe \
+#define ARM_BONUS(obj) \
+    (objects[(obj)->otyp].a_ac + (obj)->spe                             \
      - min((int) greatest_erosion(obj), objects[(obj)->otyp].a_ac))
 
 #define makeknown(x) discover_object((x), TRUE, TRUE)
-#define distu(xx, yy) dist2((int)(xx), (int)(yy), (int) u.ux, (int) u.uy)
-#define onlineu(xx, yy) online2((int)(xx), (int)(yy), (int) u.ux, (int) u.uy)
+#define distu(xx, yy) dist2((coordxy) (xx), (coordxy) (yy), u.ux, u.uy)
+#define mdistu(mon) distu((mon)->mx, (mon)->my)
+#define onlineu(xx, yy) online2((coordxy)(xx), (coordxy)(yy), u.ux, u.uy)
 
 #define rn1(x, y) (rn2(x) + (y))
 

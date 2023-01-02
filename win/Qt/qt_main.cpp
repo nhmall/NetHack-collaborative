@@ -13,7 +13,7 @@ extern "C" {
 #include <QtGui/QtGui>
 #if QT_VERSION >= 0x060000
 #include <QtGui/QShortcut>
-#else
+#elif QT_VERSION >= 0x050000
 #include <QtWidgets/QShortcut>
 #endif
 
@@ -463,7 +463,7 @@ aboutMsg()
         *p = '\0';
     /* it's also long; break it into two pieces */
     (void) strsubst(vbuf, " - ", "\n- ");
-    QString msg = QString::asprintf(
+    QString msg = nh_qsprintf(
         // format
         "NetHack-Qt is a version of NetHack built using" // no newline
 #ifdef KDE
@@ -1034,8 +1034,8 @@ void NetHackQtMainWindow::doQuit(bool)
     // nethack's #quit command itself) but this routine is unconditional
     // in case someone wants to change that
 #ifdef MACOS
-    QString info = QString::asprintf("This will end your NetHack session.%s",
-                 !g.program_state.something_worth_saving ? ""
+    QString info = nh_qsprintf("This will end your NetHack session.%s",
+                 !gp.program_state.something_worth_saving ? ""
                  : "\n(Cancel quitting and use the Save command"
                    "\nto save your current game.)");
     /* this is similar to closeEvent but the details are different;
@@ -1053,7 +1053,7 @@ void NetHackQtMainWindow::doQuit(bool)
         break; // return to game
     case 1:
         // quit -- bypass the prompting preformed by done2()
-        g.program_state.stopprint++;
+        gp.program_state.stopprint++;
         ::done(QUIT);
         /*NOTREACHED*/
         break;
@@ -1320,7 +1320,7 @@ void NetHackQtMainWindow::keyPressEvent(QKeyEvent* event)
 	event->key() >= Qt::Key_Left && event->key() <= Qt::Key_Down )
 	return;
 
-    const char* d = g.Cmd.dirchars;
+    const char* d = gc.Cmd.dirchars;
     switch (event->key()) {
     case Qt::Key_Up:
 	if ( dirkey == d[0] )
@@ -1382,7 +1382,7 @@ void NetHackQtMainWindow::keyPressEvent(QKeyEvent* event)
 void NetHackQtMainWindow::closeEvent(QCloseEvent *e UNUSED)
 {
     int ok = 0;
-    if ( g.program_state.something_worth_saving ) {
+    if ( gp.program_state.something_worth_saving ) {
         /* this used to offer "Save" and "Cancel"
            but cancel (ignoring the close attempt) won't work
            if user has clicked on the window's Close button */
@@ -1397,7 +1397,7 @@ void NetHackQtMainWindow::closeEvent(QCloseEvent *e UNUSED)
         case 1:
             // quit -- bypass the prompting preformed by done2()
             ok = 1;
-            g.program_state.stopprint++;
+            gp.program_state.stopprint++;
             ::done(QUIT);
             /*NOTREACHED*/
             break;

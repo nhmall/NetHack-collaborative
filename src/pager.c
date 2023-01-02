@@ -32,6 +32,7 @@ static void dispfile_optionfile(void);
 static void dispfile_optmenu(void);
 static void dispfile_license(void);
 static void dispfile_debughelp(void);
+static void dispfile_usagehelp(void);
 static void hmenu_doextversion(void);
 static void hmenu_dohistory(void);
 static void hmenu_dowhatis(void);
@@ -53,7 +54,7 @@ is_swallow_sym(int c)
     int i;
 
     for (i = S_sw_tl; i <= S_sw_br; i++)
-        if ((int) g.showsyms[i] == c)
+        if ((int) gs.showsyms[i] == c)
             return TRUE;
     return FALSE;
 }
@@ -95,15 +96,15 @@ self_lookat(char *outbuf)
     /* include race with role unless polymorphed */
     race[0] = '\0';
     if (!Upolyd)
-        Sprintf(race, "%s ", g.urace.adj);
+        Sprintf(race, "%s ", gu.urace.adj);
     Sprintf(outbuf, "%s%s%s called %s",
             /* being blinded may hide invisibility from self */
             (Invis && (senseself() || !Blind)) ? "invisible " : "", race,
-            pmname(&mons[u.umonnum], Ugender), g.plname);
+            pmname(&mons[u.umonnum], Ugender), gp.plname);
     if (u.usteed)
         Sprintf(eos(outbuf), ", mounted on %s", y_monnam(u.usteed));
     if (u.uundetected || (Upolyd && U_AP_TYPE))
-        mhidden_description(&g.youmonst, FALSE, eos(outbuf));
+        mhidden_description(&gy.youmonst, FALSE, eos(outbuf));
     if (Punished)
         Sprintf(eos(outbuf), ", chained to %s",
                 uball ? ansimpleoname(uball) : "nothing?");
@@ -169,9 +170,9 @@ mhidden_description(
     char *outbuf)
 {
     struct obj *otmp;
-    boolean fakeobj, isyou = (mon == &g.youmonst);
+    boolean fakeobj, isyou = (mon == &gy.youmonst);
     coordxy x = isyou ? u.ux : mon->mx, y = isyou ? u.uy : mon->my;
-    int glyph = (g.level.flags.hero_memory && !isyou) ? levl[x][y].glyph
+    int glyph = (gl.level.flags.hero_memory && !isyou) ? levl[x][y].glyph
                                                       : glyph_at(x, y);
 
     *outbuf = '\0';
@@ -231,7 +232,7 @@ object_from_map(int glyph, coordxy x, coordxy y, struct obj **obj_p)
     *obj_p = (struct obj *) 0;
     /* TODO: check inside containers in case glyph came from detection */
     if ((otmp = sobj_at(glyphotyp, x, y)) == 0)
-        for (otmp = g.level.buriedobjlist; otmp; otmp = otmp->nobj)
+        for (otmp = gl.level.buriedobjlist; otmp; otmp = otmp->nobj)
             if (otmp->ox == x && otmp->oy == y && otmp->otyp == glyphotyp)
                 break;
 
@@ -252,10 +253,10 @@ object_from_map(int glyph, coordxy x, coordxy y, struct obj **obj_p)
         if (otmp->oclass == COIN_CLASS)
             otmp->quan = 2L; /* to force pluralization */
         else if (otmp->otyp == SLIME_MOLD)
-            otmp->spe = g.context.current_fruit; /* give it a type */
+            otmp->spe = gc.context.current_fruit; /* give it a type */
         if (mtmp && has_mcorpsenm(mtmp)) { /* mimic as corpse/statue */
             if (otmp->otyp == SLIME_MOLD)
-                /* override g.context.current_fruit to avoid
+                /* override gc.context.current_fruit to avoid
                      look, use 'O' to make new named fruit, look again
                    giving different results when current_fruit changes */
                 otmp->spe = MCORPSENM(mtmp);
@@ -356,7 +357,7 @@ look_at_monster(char *buf,
             Strcat(buf, digests(mtmp->data) ? ", swallowing you"
                                             : ", engulfing you");
         else
-            Strcat(buf, (Upolyd && sticks(g.youmonst.data))
+            Strcat(buf, (Upolyd && sticks(gy.youmonst.data))
                           ? ", being held" : ", holding you");
     }
     /* if mtmp isn't able to move (other than because it is a type of
@@ -438,8 +439,8 @@ look_at_monster(char *buf,
                 if (Hallucination) {
                     Strcat(monbuf, "paranoid delusion");
                 } else {
-                    unsigned long mW = (g.context.warntype.obj
-                                        | g.context.warntype.polyd),
+                    unsigned long mW = (gc.context.warntype.obj
+                                        | gc.context.warntype.polyd),
                                   m2 = mtmp->data->mflags2;
                     const char *whom = ((mW & M2_HUMAN & m2) ? "human"
                                         : (mW & M2_ELF & m2) ? "elf"
@@ -472,7 +473,7 @@ waterbody_name(coordxy x, coordxy y)
     static char pooltype[40];
     struct rm *lev;
     schar ltyp;
-    boolean hallucinate = Hallucination && !g.program_state.gameover;
+    boolean hallucinate = Hallucination && !gp.program_state.gameover;
 
     if (!isok(x, y))
         return "drink"; /* should never happen */
@@ -577,8 +578,8 @@ lookat(coordxy x, coordxy y, char *buf, char *monbuf)
         Sprintf(buf, "interior of %s", a_monnam(u.ustuck));
         pm = u.ustuck->data;
     } else if (glyph_is_monster(glyph)) {
-        g.bhitpos.x = x;
-        g.bhitpos.y = y;
+        gb.bhitpos.x = x;
+        gb.bhitpos.y = y;
         if ((mtmp = m_at(x, y)) != 0) {
             look_at_monster(buf, monbuf, mtmp, x, y);
             pm = mtmp->data;
@@ -1000,7 +1001,7 @@ add_cmap_descr(
 
         /* grab a scratch buffer we can safely return (via *firstmatch
            when applicable) */
-        mbuf = mon_nam(&g.youmonst);
+        mbuf = mon_nam(&gy.youmonst);
 
         if (absidx == S_pool) {
             levl[cc.x][cc.y].typ = (idx == S_pool) ? POOL : MOAT;
@@ -1075,7 +1076,7 @@ do_screen_description(coord cc, boolean looked, int sym, char *out_str,
         skipped_venom = 0, found = 0; /* count of matching syms found */
     boolean hit_trap, need_to_look = FALSE,
             submerged = (Underwater && !Is_waterlevel(&u.uz)),
-            hallucinate = (Hallucination && !g.program_state.gameover);
+            hallucinate = (Hallucination && !gp.program_state.gameover);
     const char *x_str;
     nhsym tmpsym;
     glyph_info glyphinfo = nul_glyphinfo;
@@ -1145,7 +1146,7 @@ do_screen_description(coord cc, boolean looked, int sym, char *out_str,
         for (i = 1; i < MAXMCLASSES; i++) {
             if (i == S_invisible)  /* avoid matching on this */
                 continue;
-            if (sym == (looked ? g.showsyms[i + SYM_OFF_M]
+            if (sym == (looked ? gs.showsyms[i + SYM_OFF_M]
                                : def_monsyms[i].sym)
                 && def_monsyms[i].explain && *def_monsyms[i].explain) {
                 need_to_look = TRUE;
@@ -1162,7 +1163,7 @@ do_screen_description(coord cc, boolean looked, int sym, char *out_str,
         /* handle '@' as a special case if it refers to you and you're
            playing a character which isn't normally displayed by that
            symbol; firstmatch is assumed to already be set for '@' */
-        if ((looked ? (sym == g.showsyms[S_HUMAN + SYM_OFF_M]
+        if ((looked ? (sym == gs.showsyms[S_HUMAN + SYM_OFF_M]
                        && u_at(cc.x, cc.y))
                     : (sym == def_monsyms[S_HUMAN].sym && !flags.showrace))
             && !(Race_if(PM_HUMAN) || Race_if(PM_ELF)) && !Upolyd)
@@ -1172,7 +1173,7 @@ do_screen_description(coord cc, boolean looked, int sym, char *out_str,
     /* Now check for objects */
     if (!iflags.terrainmode || (iflags.terrainmode & TER_OBJ) != 0) {
         for (i = 1; i < MAXOCLASSES; i++) {
-            if (sym == (looked ? g.showsyms[i + SYM_OFF_O]
+            if (sym == (looked ? gs.showsyms[i + SYM_OFF_O]
                                : def_oc_syms[i].sym)
                 || (looked && i == ROCK_CLASS && glyph_is_statue(glyph))) {
                 need_to_look = TRUE;
@@ -1207,7 +1208,7 @@ do_screen_description(coord cc, boolean looked, int sym, char *out_str,
         }
     }
     if ((glyph && glyph_is_nothing(glyph))
-        || (looked && sym == g.showsyms[SYM_NOTHING + SYM_OFF_X])) {
+        || (looked && sym == gs.showsyms[SYM_NOTHING + SYM_OFF_X])) {
         x_str = "the dark part of a room";
         if (!found) {
             Sprintf(out_str, "%s%s", prefix, x_str);
@@ -1218,7 +1219,7 @@ do_screen_description(coord cc, boolean looked, int sym, char *out_str,
         }
     }
     if ((glyph && glyph_is_unexplored(glyph))
-        || (looked && sym == g.showsyms[SYM_UNEXPLORED + SYM_OFF_X])) {
+        || (looked && sym == gs.showsyms[SYM_UNEXPLORED + SYM_OFF_X])) {
         x_str = "unexplored";
         if (submerged)
             x_str = "land"; /* replace "unexplored" */
@@ -1246,7 +1247,7 @@ do_screen_description(coord cc, boolean looked, int sym, char *out_str,
         x_str = defsyms[alt_i].explanation;
         if (!*x_str)  /* cmap includes beams, shield effects, swallow  +*/
             continue; /*+ boundaries, and explosions; skip all of those */
-        if (sym == (looked ? g.showsyms[alt_i] : defsyms[alt_i].sym)) {
+        if (sym == (looked ? gs.showsyms[alt_i] : defsyms[alt_i].sym)) {
             int article; /* article==2 => "the", 1 => "an", 0 => (none) */
 
             /* check if dark part of a room was already included above */
@@ -1283,7 +1284,7 @@ do_screen_description(coord cc, boolean looked, int sym, char *out_str,
     /* Now check for warning symbols */
     for (i = 1; i < WARNCOUNT; i++) {
         x_str = def_warnsyms[i].explanation;
-        if (sym == (looked ? g.warnsyms[i] : def_warnsyms[i].sym)) {
+        if (sym == (looked ? gw.warnsyms[i] : def_warnsyms[i].sym)) {
             if (!found) {
                 Sprintf(out_str, "%s%s", prefix, def_warnsyms[i].explanation);
                 *firstmatch = def_warnsyms[i].explanation;
@@ -1315,8 +1316,8 @@ do_screen_description(coord cc, boolean looked, int sym, char *out_str,
     for (j = SYM_OFF_X; j < SYM_MAX; ++j) {
         if (j == (SYM_INVISIBLE + SYM_OFF_X))
             continue;       /* already handled above */
-        tmpsym = Is_rogue_level(&u.uz) ? g.ov_rogue_syms[j]
-                                       : g.ov_primary_syms[j];
+        tmpsym = Is_rogue_level(&u.uz) ? go.ov_rogue_syms[j]
+                                       : go.ov_primary_syms[j];
         if (tmpsym && sym == tmpsym) {
             switch (j) {
             case SYM_BOULDER + SYM_OFF_X: {
@@ -1341,7 +1342,7 @@ do_screen_description(coord cc, boolean looked, int sym, char *out_str,
                 }
                 break;
             case SYM_HERO_OVERRIDE + SYM_OFF_X:
-                sym = g.showsyms[S_HUMAN + SYM_OFF_M];
+                sym = gs.showsyms[S_HUMAN + SYM_OFF_M];
                 goto check_monsters;
             }
         }
@@ -1514,7 +1515,7 @@ do_look(int mode, coord *click_cc)
             if (!invlet || invlet == '\033')
                 return ECMD_OK;
             *out_str = '\0';
-            for (invobj = g.invent; invobj; invobj = invobj->nobj)
+            for (invobj = gi.invent; invobj; invobj = invobj->nobj)
                 if (invobj->invlet == invlet) {
                     strcpy(out_str, singular(invobj, xname));
                     break;
@@ -1671,8 +1672,8 @@ look_all(
                 if (glyph_is_monster(glyph)) {
                     struct monst *mtmp;
 
-                    g.bhitpos.x = x; /* [is this actually necessary?] */
-                    g.bhitpos.y = y;
+                    gb.bhitpos.x = x; /* [is this actually necessary?] */
+                    gb.bhitpos.y = y;
                     if (u_at(x, y) && canspotself()) {
                         (void) self_lookat(lookbuf);
                         ++count;
@@ -1718,11 +1719,22 @@ look_all(
                        in a fixed-width font it if finds at least one */
                     putstr(win, 0, "    "); /* separator */
                 }
+                (void) coord_desc(x, y, coordbuf, cmode);
+                /* this format wrinkle makes the commas of <x,y> line up;
+                   it isn't needed when all the y values have same number
+                   of digits but looks better when there is a mixture of 1
+                   and 2 digit values; done unconditionally because we
+                   would need two passes over the map to determine whether
+                   y width is uniform or a mixture; x width is not a factor
+                   because the result gets right-justified by %8s; adding
+                   a trailing space effectively pushes non-space text left */
+                if (cmode == GPCOORDS_MAP && y < 10)
+                    (void) strkitten(coordbuf, ' ');
                 /* prefix: "coords  C  " where 'C' is mon or obj symbol */
                 Sprintf(outbuf, (cmode == GPCOORDS_SCREEN) ? "%s  "
                                   : (cmode == GPCOORDS_MAP) ? "%8s  "
                                       : "%12s  ",
-                        coord_desc(x, y, coordbuf, cmode));
+                        coordbuf);
                 Sprintf(eos(outbuf), "%s  ", encglyph(glyph));
                 /* guard against potential overflow */
                 lookbuf[sizeof lookbuf - 1 - strlen(outbuf)] = '\0';
@@ -1935,7 +1947,7 @@ doidtrap(void)
         }
     }
 
-    for (trap = g.ftrap; trap; trap = trap->ntrap)
+    for (trap = gf.ftrap; trap; trap = trap->ntrap)
         if (trap->tx == x && trap->ty == y) {
             if (!trap->tseen)
                 break;
@@ -2356,6 +2368,12 @@ dispfile_debughelp(void)
 }
 
 static void
+dispfile_usagehelp(void)
+{
+    display_file(USAGEHELP, TRUE);
+}
+
+static void
 hmenu_doextversion(void)
 {
     (void) doextversion();
@@ -2389,6 +2407,7 @@ static void
 domenucontrols(void)
 {
     winid cwin = create_nhwindow(NHW_TEXT);
+
     show_menu_controls(cwin, FALSE);
     display_nhwindow(cwin, FALSE);
     destroy_nhwindow(cwin);
@@ -2411,6 +2430,7 @@ static const struct {
     { dokeylist, "Full list of keyboard commands." },
     { hmenu_doextlist, "List of extended commands." },
     { domenucontrols, "List menu control keys." },
+    { dispfile_usagehelp, "Description of NetHack's command line." },
     { dispfile_license, "The NetHack license." },
     { docontact, "Support information." },
 #ifdef PORT_HELP
@@ -2440,6 +2460,9 @@ dohelp(void)
     for (i = 0; help_menu_items[i].text; i++) {
         if (!wizard && help_menu_items[i].f == dispfile_debughelp)
             continue;
+        if (sysopt.hideusage && help_menu_items[i].f == dispfile_usagehelp)
+            continue;
+
         if (help_menu_items[i].text[0] == '%') {
             Sprintf(helpbuf, help_menu_items[i].text, PORT_ID);
         } else if (help_menu_items[i].f == dispfile_optmenu) {

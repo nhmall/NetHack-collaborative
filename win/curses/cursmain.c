@@ -270,14 +270,21 @@ curses_init_nhwindows(int *argcp UNUSED,
     curses_display_splash_window();
 }
 
-/* Do a window-port specific player type selection. If player_selection()
-   offers a Quit option, it is its responsibility to clean up and terminate
-   the process. You need to fill in pl_character[0].
-*/
+/* Use the general role/race/&c selection originally implemented for tty. */
 void
 curses_player_selection(void)
 {
+#if 1
+    if (genl_player_setup(0))
+        return; /* success */
+
+    /* quit/cancel */
+    curses_bail((const char *) NULL);
+    /*NOTREACHED*/
+#else
+    /* still present cursinit.c but no longer used */
     curses_choose_character();
+#endif
 }
 
 
@@ -297,9 +304,9 @@ curses_askname(void)
         }
 #endif /* SELECTSAVED */
 
-    curses_line_input_dialog("Who are you?", g.plname, PL_NSIZ);
-    (void) mungspaces(g.plname);
-    if (!g.plname[0] || g.plname[0] == '\033')
+    curses_line_input_dialog("Who are you?", gp.plname, PL_NSIZ);
+    (void) mungspaces(gp.plname);
+    if (!gp.plname[0] || gp.plname[0] == '\033')
          goto bail;
 
     iflags.renameallowed = TRUE; /* tty uses this, we don't [yet?] */
@@ -701,7 +708,7 @@ curses_update_inventory(int arg)
     }
 
     /* skip inventory updating during character initialization */
-    if (!g.program_state.in_moveloop && !g.program_state.gameover)
+    if (!gp.program_state.in_moveloop && !gp.program_state.gameover)
         return;
 
     if (!arg) {
@@ -805,7 +812,7 @@ curses_print_glyph(
     winid wid,
     coordxy x, coordxy y,
     const glyph_info *glyphinfo,
-    const glyph_info *bkglyphinfo UNUSED)
+    const glyph_info *bkglyphinfo)
 {
     int glyph;
     int ch;
@@ -854,12 +861,15 @@ curses_print_glyph(
     if (SYMHANDLING(H_UTF8)
         && glyphinfo->gm.u
         && glyphinfo->gm.u->utf8str) {
-        curses_putch(wid, x, y, ch, glyphinfo->gm.u, color, attr);
+        curses_putch(wid, x, y, ch, glyphinfo->gm.u, color,
+                     bkglyphinfo->framecolor, attr);
     } else {
-        curses_putch(wid, x, y, ch, NULL, color, attr);
+        curses_putch(wid, x, y, ch, NULL, color,
+                     bkglyphinfo->framecolor, attr);
     }
 #else
-    curses_putch(wid, x, y, ch, color, attr);
+    curses_putch(wid, x, y, ch, color,
+                 bkglyphinfo->framecolor, attr);
 #endif
 }
 

@@ -55,8 +55,8 @@ static boolean date_via_env = FALSE;
 
 extern unsigned long md_ignored_features(void);
 char *mdlib_version_string(char *, const char *);
-char *version_id_string(char *, int, const char *);
-char *bannerc_string(char *, int, const char *);
+char *version_id_string(char *, size_t, const char *);
+char *bannerc_string(char *, size_t, const char *);
 int case_insensitive_comp(const char *, const char *);
 
 static void make_version(void);
@@ -107,7 +107,7 @@ struct win_information {
 static struct win_information window_opts[] = {
 #ifdef TTY_GRAPHICS
     { "tty",
-      /* testing 'USE_TILES' here would bring confusion because it could
+      /* testing 'TILES_IN_GLYPHMAP' here would bring confusion because it could
          apply to another interface such as X11, so check MSDOS explicitly
          instead; even checking TTY_TILES_ESCCODES would probably be
          confusing to most users (and it will already be listed separately
@@ -299,103 +299,8 @@ nh_snprintf(const char *func UNUSED, int line UNUSED, char *str, size_t size,
 RESTORE_WARNING_FORMAT_NONLITERAL
 #endif  /* MAKEDEFS_C */
 
-#if defined(MAKEDEFS_C) \
-    || (NH_DEVEL_STATUS != NH_STATUS_RELEASED) || defined(DEBUG)
-/*
- * In 3.4.3 and earlier, this code was used to construct monstr[] array
- * in generated file src/monstr.c.  It wasn't used in 3.6.  For 3.7 it
- * has been reincarnated as a way to generate default monster strength
- * values:
- *      add new monster(s) to include/monsters.h with placeholder value
- *          for the monstr field;
- *      run 'makedefs -m' to create src/monstr.c; ignore the complaints
- *          about it being deprecated;
- *      transfer relevant generated monstr values to include/monsters.h;
- *      delete src/monstr.c.
- */
-static boolean ranged_attk(struct permonst *);
-
- /*
- * This routine is designed to return an integer value which represents
- * an approximation of monster strength.  It uses a similar method of
- * determination as "experience()" to arrive at the strength.
- */
-int
-mstrength(struct permonst* ptr)
-{
-    int i, tmp2, n, tmp = ptr->mlevel;
-
-    if (tmp > 49) /* special fixed hp monster */
-        tmp = 2 * (tmp - 6) / 4;
-
-    /* for creation in groups */
-    n = (!!(ptr->geno & G_SGROUP));
-    n += (!!(ptr->geno & G_LGROUP)) << 1;
-
-    /* for ranged attacks */
-    if (ranged_attk(ptr))
-        n++;
-
-    /* for higher ac values */
-    n += (ptr->ac < 4);
-    n += (ptr->ac < 0);
-
-    /* for very fast monsters */
-    n += (ptr->mmove >= 18);
-
-    /* for each attack and "special" attack */
-    for (i = 0; i < NATTK; i++) {
-        tmp2 = ptr->mattk[i].aatyp;
-        n += (tmp2 > 0);
-        n += (tmp2 == AT_MAGC);
-        n += (tmp2 == AT_WEAP && (ptr->mflags2 & M2_STRONG));
-    }
-
-    /* for each "special" damage type */
-    for (i = 0; i < NATTK; i++) {
-        tmp2 = ptr->mattk[i].adtyp;
-        if ((tmp2 == AD_DRLI) || (tmp2 == AD_STON) || (tmp2 == AD_DRST)
-            || (tmp2 == AD_DRDX) || (tmp2 == AD_DRCO) || (tmp2 == AD_WERE))
-            n += 2;
-        else if (strcmp(ptr->pmnames[NEUTRAL], "grid bug"))
-            n += (tmp2 != AD_PHYS);
-        n += ((int) (ptr->mattk[i].damd * ptr->mattk[i].damn) > 23);
-    }
-
-    /* Leprechauns are special cases.  They have many hit dice so they
-       can hit and are hard to kill, but they don't really do much damage. */
-    if (!strcmp(ptr->pmnames[NEUTRAL], "leprechaun"))
-        n -= 2;
-
-    /* finally, adjust the monster level  0 <= n <= 24 (approx.) */
-    if (n == 0)
-        tmp--;
-    else if (n >= 6)
-        tmp += (n / 2);
-    else
-        tmp += (n / 3 + 1);
-
-    return (tmp >= 0) ? tmp : 0;
-}
-
-/* returns True if monster can attack at range */
-static boolean
-ranged_attk(register struct permonst* ptr)
-{
-    register int i, j;
-    register int atk_mask = (1 << AT_BREA) | (1 << AT_SPIT) | (1 << AT_GAZE);
-
-    for (i = 0; i < NATTK; i++) {
-        if ((j = ptr->mattk[i].aatyp) >= AT_WEAP
-            || (j < 32 && (atk_mask & (1 << j)) != 0))
-            return TRUE;
-    }
-    return FALSE;
-}
-#endif /* (NH_DEVEL_STATUS != NH_STATUS_RELEASED) || DEBUG || MAKEDEFS_C */
-
 char *
-version_id_string(char *outbuf, int bufsz, const char *build_date)
+version_id_string(char *outbuf, size_t bufsz, const char *build_date)
 {
     char subbuf[64], versbuf[64];
     char statusbuf[64];
@@ -428,7 +333,7 @@ version_id_string(char *outbuf, int bufsz, const char *build_date)
 /* still within #if MAKDEFS_C || FOR_RUNTIME */
 
 char *
-bannerc_string(char *outbuf, int bufsz, const char *build_date)
+bannerc_string(char *outbuf, size_t bufsz, const char *build_date)
 {
     char subbuf[64], versbuf[64];
 
@@ -909,10 +814,10 @@ case_insensitive_comp(const char *s1, const char *s2)
     for (;; s1++, s2++) {
         u1 = (uchar) *s1;
         if (isupper(u1))
-            u1 = tolower(u1);
+            u1 = (uchar) tolower(u1);
         u2 = (uchar) *s2;
         if (isupper(u2))
-            u2 = tolower(u2);
+            u2 = (uchar) tolower(u2);
         if (u1 == '\0' || u1 != u2)
             break;
     }

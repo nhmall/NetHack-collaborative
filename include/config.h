@@ -202,6 +202,9 @@
  *              PERS_IS_UID  (0 or 1 - person is name or (numeric) userid)
  *            Can force incubi/succubi behavior to be toned down to nymph-like:
  *              SEDUCE       (0 or 1 - runtime disable/enable SEDUCE option)
+ *            Can hide the entry for displaying command line usage from
+ *            the help menu if players don't have access to command lines:
+ *              HIDEUSAGE    (0 or 1 - runtime show/hide command line usage)
  *            The following options pertain to crash reporting:
  *              GREPPATH     (the path to the system grep(1) utility)
  *              GDBPATH      (the path to the system gdb(1) program)
@@ -420,6 +423,7 @@
  * #define MAX_NR_OF_PLAYERS 6
  */
 #endif /* CHDIR */
+
 
 /*
  * Section 3:   Definitions that may vary with system type.
@@ -665,8 +669,8 @@ typedef unsigned char uchar;
 /* End of Section 4 */
 
 #ifdef TTY_TILES_ESCCODES
-# ifndef USE_TILES
-#  define USE_TILES
+# ifndef TILES_IN_GLYPHMAP
+#  define TILES_IN_GLYPHMAP
 # endif
 #endif
 

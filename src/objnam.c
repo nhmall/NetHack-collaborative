@@ -73,19 +73,21 @@ struct Jitem {
              && typ != SAPPHIRE && typ != BLACK_OPAL && typ != EMERALD \
              && typ != OPAL)))
 
-static struct Jitem Japanese_items[] = { { SHORT_SWORD, "wakizashi" },
-                                             { BROADSWORD, "ninja-to" },
-                                             { FLAIL, "nunchaku" },
-                                             { GLAIVE, "naginata" },
-                                             { LOCK_PICK, "osaku" },
-                                             { WOODEN_HARP, "koto" },
-                                             { KNIFE, "shito" },
-                                             { PLATE_MAIL, "tanko" },
-                                             { HELMET, "kabuto" },
-                                             { LEATHER_GLOVES, "yugake" },
-                                             { FOOD_RATION, "gunyoki" },
-                                             { POT_BOOZE, "sake" },
-                                             { 0, "" } };
+static struct Jitem Japanese_items[] = {
+    { SHORT_SWORD, "wakizashi" },
+    { BROADSWORD, "ninja-to" },
+    { FLAIL, "nunchaku" },
+    { GLAIVE, "naginata" },
+    { LOCK_PICK, "osaku" },
+    { WOODEN_HARP, "koto" },
+    { KNIFE, "shito" },
+    { PLATE_MAIL, "tanko" },
+    { HELMET, "kabuto" },
+    { LEATHER_GLOVES, "yugake" },
+    { FOOD_RATION, "gunyoki" },
+    { POT_BOOZE, "sake" },
+    { 0, "" }
+};
 
 static const char *Japanese_item_name(int i);
 
@@ -287,7 +289,7 @@ obj_is_pname(struct obj* obj)
 {
     if (!obj->oartifact || !has_oname(obj))
         return FALSE;
-    if (!g.program_state.gameover && !iflags.override_ID) {
+    if (!gp.program_state.gameover && !iflags.override_ID) {
         if (not_fully_identified(obj))
             return FALSE;
     }
@@ -337,9 +339,9 @@ distant_name(
            value; but the Eyes of the Overworld override blindness and
            would let characters wearing them get obj->dknown set for
            distant items, so the external flag was added */
-        ++g.distantname;
+        ++gd.distantname;
         str = (*func)(obj);
-        --g.distantname;
+        --gd.distantname;
     }
     return str;
 }
@@ -351,12 +353,12 @@ fruitname(
     boolean juice) /* whether or not to append " juice" to the name */
 {
     char *buf = nextobuf();
-    const char *fruit_nam = strstri(g.pl_fruit, " of ");
+    const char *fruit_nam = strstri(gp.pl_fruit, " of ");
 
     if (fruit_nam)
         fruit_nam += 4; /* skip past " of " */
     else
-        fruit_nam = g.pl_fruit; /* use it as is */
+        fruit_nam = gp.pl_fruit; /* use it as is */
 
     Sprintf(buf, "%s%s", makesingular(fruit_nam), juice ? " juice" : "");
     return buf;
@@ -368,7 +370,7 @@ fruit_from_indx(int indx)
 {
     struct fruit *f;
 
-    for (f = g.ffruit; f; f = f->nextf)
+    for (f = gf.ffruit; f; f = f->nextf)
         if (f->fid == indx)
             break;
     return f;
@@ -391,7 +393,7 @@ fruit_from_name(
     if (highest_fid)
         *highest_fid = 0;
     /* first try for an exact match */
-    for (f = g.ffruit; f; f = f->nextf)
+    for (f = gf.ffruit; f; f = f->nextf)
         if (!strcmp(f->fname, fname))
             return f;
         else if (highest_fid && f->fid > *highest_fid)
@@ -402,7 +404,7 @@ fruit_from_name(
        matches, not the first */
     if (!exact) {
         tentativef = 0;
-        for (f = g.ffruit; f; f = f->nextf) {
+        for (f = gf.ffruit; f; f = f->nextf) {
             k = Strlen(f->fname);
             if (!strncmp(f->fname, fname, k)
                 && (!fname[k] || fname[k] == ' ')
@@ -415,7 +417,7 @@ fruit_from_name(
        for exact match, that's trivial, but for prefix, it's hard */
     if (!f) {
         altfname = makesingular(fname);
-        for (f = g.ffruit; f; f = f->nextf) {
+        for (f = gf.ffruit; f; f = f->nextf) {
             if (!strcmp(f->fname, altfname))
                 break;
         }
@@ -426,7 +428,7 @@ fruit_from_name(
         unsigned fname_k = Strlen(fname); /* length of assumed plural fname */
 
         tentativef = 0;
-        for (f = g.ffruit; f; f = f->nextf) {
+        for (f = gf.ffruit; f; f = f->nextf) {
             k = Strlen(f->fname);
             /* reload fnamebuf[] each iteration in case it gets modified;
                there's no need to recalculate fname_k */
@@ -463,7 +465,7 @@ reorder_fruit(boolean forward)
 
     for (i = 0; i < k; ++i)
         allfr[i] = (struct fruit *) 0;
-    for (f = g.ffruit; f; f = f->nextf) {
+    for (f = gf.ffruit; f; f = f->nextf) {
         /* without sanity checking, this would reduce to 'allfr[f->fid]=f' */
         j = f->fid;
         if (j < 1 || j >= k) {
@@ -475,7 +477,7 @@ reorder_fruit(boolean forward)
         }
         allfr[j] = f;
     }
-    g.ffruit = 0; /* reset linked list; we're rebuilding it from scratch */
+    gf.ffruit = 0; /* reset linked list; we're rebuilding it from scratch */
     /* slot [0] will always be empty; must start 'i' at 1 to avoid
        [k - i] being out of bounds during first iteration */
     for (i = 1; i < k; ++i) {
@@ -483,8 +485,8 @@ reorder_fruit(boolean forward)
            for backward ordering, go from low to high */
         j = forward ? (k - i) : i;
         if (allfr[j]) {
-            allfr[j]->nextf = g.ffruit;
-            g.ffruit = allfr[j];
+            allfr[j]->nextf = gf.ffruit;
+            gf.ffruit = allfr[j];
         }
     }
 }
@@ -528,7 +530,7 @@ xname_flags(
      */
     if (!nn && ocl->oc_uses_known && ocl->oc_unique)
         obj->known = 0;
-    if (!Blind && !g.distantname)
+    if (!Blind && !gd.distantname)
         obj->dknown = 1;
     if (Role_if(PM_CLERIC))
         obj->bknown = 1; /* avoid set_bknown() to bypass update_inventory() */
@@ -621,34 +623,21 @@ xname_flags(
         if (is_boots(obj) || is_gloves(obj))
             Strcpy(buf, "pair of ");
 
-        if (obj->otyp >= ELVEN_SHIELD && obj->otyp <= ORCISH_SHIELD
-            && !dknown) {
-            Strcpy(buf, "shield");
-            break;
-        }
-        if (obj->otyp == SHIELD_OF_REFLECTION && !dknown) {
-            Strcpy(buf, "smooth shield");
-            break;
+        if (!dknown) {
+            if (obj->otyp >= ELVEN_SHIELD && obj->otyp <= ORCISH_SHIELD) {
+                Strcpy(buf, "shield");
+                break;
+            } else if (obj->otyp == SHIELD_OF_REFLECTION) {
+                Strcpy(buf, "smooth shield");
+                break;
+            }
         }
 
-        if (nn) {
+        if (nn)
             Strcat(buf, actualn);
-        } else if (un) {
-            if (is_boots(obj))
-                Strcat(buf, "boots");
-            else if (is_gloves(obj))
-                Strcat(buf, "gloves");
-            else if (is_cloak(obj))
-                Strcpy(buf, "cloak");
-            else if (is_helmet(obj))
-                Strcpy(buf, "helmet");
-            else if (is_shield(obj))
-                Strcpy(buf, "shield");
-            else
-                Strcpy(buf, "armor");
-            Strcat(buf, " called ");
-            Strcat(buf, un);
-        } else
+        else if (un)
+            Sprintf(eos(buf), "%s called %s", armor_simple_name(obj), un);
+        else
             Strcat(buf, dn);
         break;
     case FOOD_CLASS:
@@ -845,7 +834,7 @@ xname_flags(
     }
 
     /* maybe give some extra information which isn't shown during play */
-    if (g.program_state.gameover) {
+    if (gp.program_state.gameover) {
         const char *lbl;
         char tmpbuf[BUFSZ];
 
@@ -949,10 +938,10 @@ mshot_xname(struct obj* obj)
     char tmpbuf[BUFSZ];
     char *onm = xname(obj);
 
-    if (g.m_shot.n > 1 && g.m_shot.o == obj->otyp) {
+    if (gm.m_shot.n > 1 && gm.m_shot.o == obj->otyp) {
         /* "the Nth arrow"; value will eventually be passed to an() or
            The(), both of which correctly handle this "the " prefix */
-        Sprintf(tmpbuf, "the %d%s ", g.m_shot.i, ordin(g.m_shot.i));
+        Sprintf(tmpbuf, "the %d%s ", gm.m_shot.i, ordin(gm.m_shot.i));
         onm = strprepend(onm, tmpbuf);
     }
     return onm;
@@ -1324,7 +1313,7 @@ doname_base(
                 Strcat(prefix, "stale ");
 #endif
             if (omndx >= LOW_PM
-                && (known || (g.mvitals[omndx].mvflags & MV_KNOWS_EGG))) {
+                && (known || (gm.mvitals[omndx].mvflags & MV_KNOWS_EGG))) {
                 Strcat(prefix, mons[omndx].pmnames[NEUTRAL]);
                 Strcat(prefix, " ");
                 if (obj->spe == 1)
@@ -1354,7 +1343,7 @@ doname_base(
                                          : "unspecified gender");
     }
 
-    if ((obj->owornmask & W_WEP) && !g.mrg_to_wielded) {
+    if ((obj->owornmask & W_WEP) && !gm.mrg_to_wielded) {
         boolean twoweap_primary = (obj == uwep && u.twoweap),
                 tethered = (obj->otyp == AKLYS);
 
@@ -1383,11 +1372,11 @@ doname_base(
                     (twoweap_primary && !tethered) ? "wielded" : "weapon",
                     twoweap_primary ? "right " : "", hand_s);
             if (!Blind) {
-                if (g.warn_obj_cnt && obj == uwep
+                if (gw.warn_obj_cnt && obj == uwep
                     && (EWarn_of_mon & W_WEP) != 0L)
                     /* we know bp[] ends with ')'; overwrite that */
                     Sprintf(eos(bp) - 1, ", %s %s)",
-                            glow_verb(g.warn_obj_cnt, TRUE),
+                            glow_verb(gw.warn_obj_cnt, TRUE),
                             glow_color(obj->oartifact));
                 else if (obj->lamplit && artifact_light(obj))
                     /* as above, overwrite known closing paren */
@@ -1438,7 +1427,7 @@ doname_base(
        bill might not be available yet while restore is in progress
        (objects won't normally be formatted during that time, but if
        'perm_invent' is enabled then they might be [not any more...]) */
-    if (iflags.suppress_price || g.program_state.restoring) {
+    if (iflags.suppress_price || gp.program_state.restoring) {
         ; /* don't attempt to obtain any shop pricing, even if 'with_price' */
     } else if (is_unpaid(obj)) { /* in inventory or in container in invent */
         long quotedprice = unpaid_cost(obj, TRUE);
@@ -2132,7 +2121,7 @@ ansimpleoname(struct obj* obj)
     int otyp = obj->otyp;
 
     /* prefix with "the" if a unique item, or a fake one imitating same,
-       has been formatted with its actual name (we let typename() handle
+       has been formatted with its actual name (we let minimal_xname() handle
        any `known' and `dknown' checking necessary) */
     if (otyp == FAKE_AMULET_OF_YENDOR)
         otyp = AMULET_OF_YENDOR;
@@ -3071,6 +3060,7 @@ static const struct alt_spellings {
     { "gauntlets of ogre power", GAUNTLETS_OF_POWER },
     { "gauntlets of giant strength", GAUNTLETS_OF_POWER },
     { "elven chain mail", ELVEN_MITHRIL_COAT },
+    { "silver shield", SHIELD_OF_REFLECTION },
     { "potion of sleep", POT_SLEEPING },
     { "scroll of recharging", SCR_CHARGING },
     { "recharging", SCR_CHARGING },
@@ -3110,7 +3100,7 @@ rnd_otyp_by_wpnskill(schar skill)
     int i, n = 0;
     short otyp = STRANGE_OBJECT;
 
-    for (i = g.bases[WEAPON_CLASS];
+    for (i = gb.bases[WEAPON_CLASS];
          i < NUM_OBJECTS && objects[i].oc_class == WEAPON_CLASS; i++)
         if (objects[i].oc_skill == skill) {
             n++;
@@ -3118,7 +3108,7 @@ rnd_otyp_by_wpnskill(schar skill)
         }
     if (n > 0) {
         n = rn2(n);
-        for (i = g.bases[WEAPON_CLASS];
+        for (i = gb.bases[WEAPON_CLASS];
              i < NUM_OBJECTS && objects[i].oc_class == WEAPON_CLASS; i++)
             if (objects[i].oc_skill == skill)
                 if (--n < 0)
@@ -3150,8 +3140,8 @@ rnd_otyp_by_namedesc(
 
     (void) memset((genericptr_t) validobjs, 0, sizeof validobjs);
     if (oclass) {
-        lo = g.bases[(uchar) oclass];
-        hi = g.bases[(uchar) oclass + 1] - 1;
+        lo = gb.bases[(uchar) oclass];
+        hi = gb.bases[(uchar) oclass + 1] - 1;
     } else {
         lo = STRANGE_OBJECT + 1;
         hi = NUM_OBJECTS - 1;
@@ -3248,7 +3238,7 @@ wizterrainwish(struct _readobjnam_data *d)
     p = eos(bp);
     if (!BSTRCMPI(bp, p - 8, "fountain")) {
         lev->typ = FOUNTAIN;
-        g.level.flags.nfountains++;
+        gl.level.flags.nfountains++;
         lev->looted = d->looted ? F_LOOTED : 0; /* overlays 'flags' */
         lev->blessedftn = !strncmpi(bp, "magic ", 6);
         pline("A %sfountain.", lev->blessedftn ? "magic " : "");
@@ -3260,7 +3250,7 @@ wizterrainwish(struct _readobjnam_data *d)
         madeterrain = TRUE;
     } else if (!BSTRCMPI(bp, p - 4, "sink")) {
         lev->typ = SINK;
-        g.level.flags.nsinks++;
+        gl.level.flags.nsinks++;
         lev->looted = d->looted ? (S_LPUDDING | S_LDWASHER | S_LRING) : 0;
         pline("A sink.");
         madeterrain = TRUE;
@@ -3283,7 +3273,7 @@ wizterrainwish(struct _readobjnam_data *d)
         EHalluc_resistance = save_prop;
         pline("%s.", An(new_water));
         /* Must manually make kelp! */
-        water_damage_chain(g.level.objects[x][y], TRUE);
+        water_damage_chain(gl.level.objects[x][y], TRUE);
         madeterrain = TRUE;
 
     /* also matches "molten lava" */
@@ -3487,9 +3477,9 @@ wizterrainwish(struct _readobjnam_data *d)
            increment above gets canceled out by the decrement here;
            otherwise if fountain or sink was replaced, there's one less */
         if (IS_FOUNTAIN(oldtyp))
-            g.level.flags.nfountains--;
+            gl.level.flags.nfountains--;
         else if (IS_SINK(oldtyp))
-            g.level.flags.nsinks--;
+            gl.level.flags.nsinks--;
         /* horizontal is overlaid by fountain->blessedftn, grave->disturbed */
         if (IS_FOUNTAIN(oldtyp) || IS_GRAVE(oldtyp)
             || IS_WALL(oldtyp) || oldtyp == IRONBARS
@@ -3548,7 +3538,7 @@ readobjnam_init(char *bp, struct _readobjnam_data *d)
     d->bp = d->origbp = bp;
     d->p = (char *) 0;
     d->name = (const char *) 0;
-    d->ftype = g.context.current_fruit;
+    d->ftype = gc.context.current_fruit;
     (void) memset(d->globbuf, '\0', sizeof d->globbuf);
     (void) memset(d->fruitbuf, '\0', sizeof d->fruitbuf);
 }
@@ -4129,7 +4119,7 @@ readobjnam_postparse1(struct _readobjnam_data *d)
         d->otmp = mksobj(GOLD_PIECE, FALSE, FALSE);
         d->otmp->quan = (long) d->cnt;
         d->otmp->owt = weight(d->otmp);
-        g.context.botl = 1;
+        gc.context.botl = 1;
         return 3; /*return otmp;*/
     }
 
@@ -4276,7 +4266,7 @@ readobjnam_postparse2(struct _readobjnam_data *d)
             s += 9;
         if (!strcmpi(s, "glass")) { /* choose random color */
             /* 9 different kinds */
-            d->typ = LAST_GEM + rnd(NUM_GLASS_GEMS);
+            d->typ = FIRST_GLASS_GEM + rn2(NUM_GLASS_GEMS);
             if (objects[d->typ].oc_class == GEM_CLASS)
                 return 2; /*goto typfnd;*/
             else
@@ -4304,7 +4294,7 @@ readobjnam_postparse3(struct _readobjnam_data *d)
 
     /* check real names of gems first */
     if (!d->oclass && d->actualn) {
-        for (i = g.bases[GEM_CLASS]; i <= LAST_GEM; i++) {
+        for (i = gb.bases[GEM_CLASS]; i <= LAST_REAL_GEM; i++) {
             register const char *zn;
 
             if ((zn = OBJ_NAME(objects[i])) != 0 && !strcmpi(d->actualn, zn)) {
@@ -4412,7 +4402,7 @@ readobjnam_postparse3(struct _readobjnam_data *d)
             fp += l;
         }
 
-        for (f = g.ffruit; f; f = f->nextf) {
+        for (f = gf.ffruit; f; f = f->nextf) {
             /* match type: 0=none, 1=exact, 2=singular, 3=plural */
             int ftyp = 0;
 
@@ -4532,7 +4522,7 @@ readobjnam(char *bp, struct obj *no_wish)
      * Disallow such topology tweaks for WIZKIT startup wishes.
      */
  wiztrap:
-    if (wizard && !g.program_state.wizkit_wishing && !d.oclass) {
+    if (wizard && !gp.program_state.wizkit_wishing && !d.oclass) {
         /* [inline code moved to separate routine to unclutter readobjnam] */
         if ((d.otmp = wizterrainwish(&d)) != 0)
             return d.otmp;
@@ -4620,7 +4610,7 @@ readobjnam(char *bp, struct obj *no_wish)
             if (rn1cnt > 6 - d.gsize)
                 rn1cnt = 6 - d.gsize;
             if (d.cnt > rn1cnt
-                && (!wizard || g.program_state.wizkit_wishing
+                && (!wizard || gp.program_state.wizkit_wishing
                     || yn("Override glob weight limit?") != 'y'))
                 d.cnt = rn1cnt;
             d.otmp->owt *= (unsigned) d.cnt;
@@ -4754,7 +4744,7 @@ readobjnam(char *bp, struct obj *no_wish)
            corpses and tins, switch to their corresponding human form;
            for figurines, override the can't-be-human restriction instead */
         if (d.typ != FIGURINE && is_were(&mons[d.mntmp])
-            && (g.mvitals[d.mntmp].mvflags & G_NOCORPSE) != 0
+            && (gm.mvitals[d.mntmp].mvflags & G_NOCORPSE) != 0
             && (humanwere = counter_were(d.mntmp)) != NON_PM)
             d.mntmp = humanwere;
 
@@ -4763,14 +4753,14 @@ readobjnam(char *bp, struct obj *no_wish)
             if (dead_species(d.mntmp, FALSE)) {
                 d.otmp->corpsenm = NON_PM; /* it's empty */
             } else if ((!(mons[d.mntmp].geno & G_UNIQ) || wizard)
-                       && !(g.mvitals[d.mntmp].mvflags & G_NOCORPSE)
+                       && !(gm.mvitals[d.mntmp].mvflags & G_NOCORPSE)
                        && mons[d.mntmp].cnutrit != 0) {
                 d.otmp->corpsenm = d.mntmp;
             }
             break;
         case CORPSE:
             if ((!(mons[d.mntmp].geno & G_UNIQ) || wizard)
-                && !(g.mvitals[d.mntmp].mvflags & G_NOCORPSE)) {
+                && !(gm.mvitals[d.mntmp].mvflags & G_NOCORPSE)) {
                 if (mons[d.mntmp].msound == MS_GUARDIAN)
                     d.mntmp = genus(d.mntmp, 1);
                 set_corpsenm(d.otmp, d.mntmp);
@@ -4979,6 +4969,42 @@ Japanese_item_name(int i)
         j++;
     }
     return (const char *) 0;
+}
+
+const char *
+armor_simple_name(struct obj *armor)
+{
+    const char *result = 0;
+    unsigned armcat = objects[armor->otyp].oc_armcat;
+
+    switch (armcat) {
+    case ARM_SUIT:
+        result = suit_simple_name(armor);
+        break;
+    case ARM_CLOAK:
+        result = cloak_simple_name(armor);
+        break;
+    case ARM_HELM:
+        result = helm_simple_name(armor);
+        break;
+    case ARM_GLOVES:
+        result = gloves_simple_name(armor);
+        break;
+    case ARM_BOOTS:
+        result = boots_simple_name(armor);
+        break;
+    case ARM_SHIELD:
+        result = shield_simple_name(armor);
+        break;
+    case ARM_SHIRT:
+        result = shirt_simple_name(armor);
+        break;
+    default:
+        result = simpleonames(armor);
+        impossible("unknown armor category (%s => %u)", result, armcat);
+        break;
+    }
+    return result;
 }
 
 const char *
