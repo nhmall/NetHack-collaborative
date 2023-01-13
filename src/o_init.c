@@ -31,8 +31,10 @@ shuffle_tiles(void)
     short tmp_tilemap[2][NUM_OBJECTS];
 
     for (i = 0; i < NUM_OBJECTS; i++) {
-        tmp_tilemap[0][i] = glyphmap[objects[i].oc_descr_idx + GLYPH_OBJ_OFF].tileidx;
-        tmp_tilemap[1][i] = glyphmap[objects[i].oc_descr_idx + GLYPH_OBJ_PILETOP_OFF].tileidx;
+        tmp_tilemap[0][i] = glyphmap[objects[i].oc_descr_idx
+                                     + GLYPH_OBJ_OFF].tileidx;
+        tmp_tilemap[1][i] = glyphmap[objects[i].oc_descr_idx
+                                     + GLYPH_OBJ_PILETOP_OFF].tileidx;
     }
     for (i = 0; i < NUM_OBJECTS; i++) {
         glyphmap[i + GLYPH_OBJ_OFF].tileidx = tmp_tilemap[0][i];
@@ -122,17 +124,19 @@ init_objects(void)
 #define COPY_OBJ_DESCR(o_dst, o_src) o_dst.oc_descr_idx = o_src.oc_descr_idx
 #endif
 
-    /* bug fix to prevent "initialization error" abort on Intel Xenix.
-     * reported by mikew@semike
-     */
-    for (i = 0; i <= MAXOCLASSES; i++)
+    for (i = 0; i <= MAXOCLASSES; i++) {
         gb.bases[i] = 0;
+        if (i > 0 && i < MAXOCLASSES && objects[i].oc_class != i)
+            panic(
+              "init_objects: class for generic object #%d doesn't match (%d)",
+                  i, objects[i].oc_class);
+    }
     /* initialize object descriptions */
     for (i = 0; i < NUM_OBJECTS; i++)
         objects[i].oc_name_idx = objects[i].oc_descr_idx = i;
     /* init base; if probs given check that they add up to 1000,
        otherwise compute probs */
-    first = 0;
+    first = MAXOCLASSES;
     prevoclass = -1;
     while (first < NUM_OBJECTS) {
         oclass = objects[first].oc_class;
@@ -188,7 +192,7 @@ init_objects(void)
             gb.bases[last] = gb.bases[last + 1];
 
     /* check objects[].oc_name_known */
-    for (i = 0; i < NUM_OBJECTS; ++i) {
+    for (i = MAXOCLASSES; i < NUM_OBJECTS; ++i) {
         int nmkn = objects[i].oc_name_known != 0;
 
         if (!OBJ_DESCR(objects[i]) ^ nmkn) {
@@ -883,7 +887,7 @@ doclassdisco(void)
            but requires at least one artifact discovery for other styles
            [could fix that by forcing the 'a' choice into the pick-class
            menu when running in wizard mode] */
-        if (wizard && yn("Dump information about all artifacts?") == 'y') {
+        if (wizard && y_n("Dump information about all artifacts?") == 'y') {
             dump_artifact_info(tmpwin);
             ct = NROFARTIFACTS; /* non-zero vs zero is what matters below */
             break;
