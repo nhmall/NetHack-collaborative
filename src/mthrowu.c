@@ -377,6 +377,7 @@ ohitmon(
         if (ismimic)
             seemimic(mtmp);
         mtmp->msleeping = 0;
+        Soundeffect(se_splat_egg, 35);
         if (vis) {
             if (otmp->otyp == EGG) {
                 pline("Splat!  %s is hit with %s egg!", Monnam(mtmp),
@@ -830,6 +831,7 @@ spitmm(struct monst* mtmp, struct attack* mattk, struct monst* mtarg)
                 pline("A dry rattle comes from %s throat.",
                       s_suffix(mon_nam(mtmp)));
             } else {
+                Soundeffect(se_dry_throat_rattle, 50);
                 You_hear("a dry rattle nearby.");
             }
         }
@@ -902,10 +904,12 @@ breamm(struct monst* mtmp, struct attack* mattk, struct monst* mtarg)
     if (m_lined_up(mtarg, mtmp)) {
         if (mtmp->mcan) {
             if (!Deaf) {
-                if (canseemon(mtmp))
+                if (canseemon(mtmp)) {
                     pline("%s coughs.", Monnam(mtmp));
-                else
+                } else {
+                    Soundeffect(se_cough, 100);
                     You_hear("a cough.");
+                }
             }
             return MM_MISS;
         }
@@ -1209,7 +1213,9 @@ hit_bars(
     struct obj *otmp = *objp;
     int obj_type = otmp->otyp;
     boolean nodissolve = (levl[barsx][barsy].wall_info & W_NONDIGGABLE) != 0,
-            your_fault = (breakflags & BRK_BY_HERO) != 0;
+            your_fault = (breakflags & BRK_BY_HERO) != 0,
+            melee_attk = (breakflags & BRK_MELEE) != 0;
+    int noise = 0;
 
     if (your_fault
         ? hero_breaks(otmp, objx, objy, breakflags)
@@ -1217,23 +1223,63 @@ hit_bars(
         *objp = 0; /* object is now gone */
         /* breakage makes its own noises */
         if (obj_type == POT_ACID) {
-            if (cansee(barsx, barsy) && !nodissolve)
+            if (cansee(barsx, barsy) && !nodissolve) {
                 pline_The("iron bars are dissolved!");
-            else
+            } else {
+                Soundeffect(se_angry_snakes, 100);
                 You_hear(Hallucination ? "angry snakes!"
                                        : "a hissing noise.");
+            }
             if (!nodissolve)
                 dissolve_bars(barsx, barsy);
         }
     } else {
-        if (!Deaf)
-            pline("%s!", (obj_type == BOULDER || obj_type == HEAVY_IRON_BALL)
-                         ? "Whang"
+        if (!Deaf) {
+            static enum sound_effect_entries se[] SOUNDLIBONLY = {
+                se_zero_invalid,
+                se_bars_whang, se_bars_whap, se_bars_flapp,
+                se_bars_clink, se_bars_clonk
+            };
+            static const char *const barsounds[] = {
+                "", "Whang", "Whap", "Flapp", "Clink", "Clonk"
+            };
+            int bsindx = (obj_type == BOULDER || obj_type == HEAVY_IRON_BALL)
+                         ? 1
+                         : harmless_missile(otmp) ? 2
+                         : is_flimsy(otmp) ? 3
                          : (otmp->oclass == COIN_CLASS
                             || objects[obj_type].oc_material == GOLD
                             || objects[obj_type].oc_material == SILVER)
-                           ? "Clink"
-                           : "Clonk");
+                           ? 4
+                           : SIZE(barsounds) - 1;
+
+            Soundeffect(se[bsindx], 100);
+            pline("%s!", barsounds[bsindx]);
+        }
+        if (!(harmless_missile(otmp) || is_flimsy(otmp)))
+            noise = 4 * 4;
+
+        if (your_fault && (otmp->otyp == WAR_HAMMER
+                           || otmp->otyp == HEAVY_IRON_BALL)) {
+            /* iron ball isn't a weapon or wep-tool so doesn't use obj->spe;
+               weight is normally 480 but can be increased by increments
+               of 160 (scrolls of punishment read while already punished) */
+            int spe = ((otmp->otyp == HEAVY_IRON_BALL) /* 3+ for iron ball */
+                       ? ((int) otmp->owt / IRON_BALL_W_INCR)
+                       : otmp->spe);
+            /* chance: used in saving throw for the bars; more likely to
+               break those when 'chance' is _lower_; acurrstr(): 3..25 */
+            int chance = (melee_attk ? 40 : 60) - acurrstr() - spe;
+
+            if (!rn2(max(2, chance))) {
+                You("break the bars apart!");
+                dissolve_bars(barsx, barsy);
+                noise = noise * 2;
+            }
+        }
+
+        if (noise)
+            wake_nearto(barsx, barsy, noise);
     }
 }
 

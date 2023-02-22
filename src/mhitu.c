@@ -739,12 +739,16 @@ mattacku(register struct monst *mtmp)
                 } else if (digests(mtmp->data)) {
                     pline("%s gulps some air!", Monnam(mtmp));
                 } else {
-                    if (youseeit)
+                    if (youseeit) {
                         pline("%s lunges forward and recoils!", Monnam(mtmp));
-                    else
+                    } else {
+                        if (is_whirly(mtmp->data)) {
+                            Soundeffect(se_rushing_wind_noise, 60);
+                        }
                         You_hear("a %s nearby.",
                                  is_whirly(mtmp->data) ? "rushing noise"
                                                        : "splat");
+                    }
                 }
             }
             break;
@@ -841,7 +845,7 @@ summonmu(struct monst *mtmp, boolean youseeit)
 
     if (is_demon(mdat)) {
         if (mdat != &mons[PM_BALROG] && mdat != &mons[PM_AMOROUS_DEMON]) {
-            if (!rn2(13))
+            if (!rn2(Inhell ? 10 : 16))
                 (void) msummon(mtmp);
         }
         return; /* no such thing as a demon were creature, so we're done */
@@ -876,7 +880,8 @@ summonmu(struct monst *mtmp, boolean youseeit)
                 const char *from_nowhere;
 
                 if (!Deaf) {
-                    pline("%s %s!", Something, makeplural(growl_sound(mtmp)));
+                    pline("%s %s!", Something,
+                          makeplural(growl_sound(mtmp)));
                     from_nowhere = "";
                 } else {
                     from_nowhere = " from nowhere";
@@ -1861,6 +1866,7 @@ doseduce(struct monst *mon)
                                  " looks pretty.  May I have it?\"", ring,
                                  xname, simpleonames, "ring");
                 makeknown(RIN_ADORNMENT);
+                SetVoice(mon, 0, 80, 0);
                 if (y_n(qbuf) == 'n')
                     continue;
             } else
@@ -1891,6 +1897,7 @@ doseduce(struct monst *mon)
                                  " looks pretty.  Would you wear it for me?\"",
                                  ring, xname, simpleonames, "ring");
                 makeknown(RIN_ADORNMENT);
+                SetVoice(mon, 0, 80, 0);
                 if (y_n(qbuf) == 'n')
                     continue;
             } else {
@@ -1964,6 +1971,7 @@ doseduce(struct monst *mon)
     if (uarm || uarmc) {
         if (!Deaf) {
             if (!(ld() && mon->female)) {
+                SetVoice(mon, 0, 80, 0);
                 verbalize("You're such a %s; I wish...",
                           flags.female ? "sweet lady" : "nice guy");
             } else {
@@ -2107,6 +2115,7 @@ doseduce(struct monst *mon)
         if (cost > umoney)
             cost = umoney;
         if (!cost) {
+            SetVoice(mon, 0, 80, 0);
             verbalize("It's on the house!");
         } else {
             pline("%s takes %ld %s for services rendered!", noit_Monnam(mon),
@@ -2141,6 +2150,7 @@ mayberem(struct monst *mon,
     if (Deaf) {
         pline("%s takes off your %s.", seducer, str);
     } else if (rn2(20) < ACURR(A_CHA)) {
+        SetVoice(mon, 0, 80, 0); /* y_n a.k.a. yn_function is set up for this */
         Sprintf(qbuf, "\"Shall I remove your %s, %s?\"", str,
                 (!rn2(2) ? "lover" : !rn2(2) ? "dear" : "sweetheart"));
         if (y_n(qbuf) == 'n')
@@ -2150,6 +2160,7 @@ mayberem(struct monst *mon,
 
         Sprintf(hairbuf, "let me run my fingers through your %s",
                 body_part(HAIR));
+        SetVoice(mon, 0, 80, 0);
         verbalize("Take off your %s; %s.", str,
                   (obj == uarm)
                      ? "let's get a little closer"

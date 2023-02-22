@@ -18,11 +18,10 @@ static int dog_goal(struct monst *, struct edog *, int, int, int);
 static struct monst *find_targ(struct monst *, int, int, int);
 static int find_friends(struct monst *, struct monst *, int);
 static struct monst *best_target(struct monst *);
+static int pet_ranged_attk(struct monst *);
 static long score_targ(struct monst *, struct monst *);
 static boolean can_reach_location(struct monst *, coordxy, coordxy, coordxy,
                                   coordxy);
-static boolean could_reach_item(struct monst *, coordxy, coordxy);
-static void quickmimic(struct monst *);
 
 /* pick a carried item for pet to drop */
 struct obj *
@@ -220,8 +219,7 @@ dog_eat(struct monst *mtmp,
         boolean devour)
 {
     register struct edog *edog = EDOG(mtmp);
-    boolean poly, grow, heal, eyes, slimer, deadmimic;
-    int nutrit, res, corpsenm;
+    int nutrit, res;
     long oprice;
     char objnambuf[BUFSZ], *obj_name;
 
@@ -229,16 +227,6 @@ dog_eat(struct monst *mtmp,
     if (edog->hungrytime < gm.moves)
         edog->hungrytime = gm.moves;
     nutrit = dog_nutrition(mtmp, obj);
-
-    deadmimic = (obj->otyp == CORPSE && (obj->corpsenm == PM_SMALL_MIMIC
-                                         || obj->corpsenm == PM_LARGE_MIMIC
-                                         || obj->corpsenm == PM_GIANT_MIMIC));
-    slimer = (obj->otyp == GLOB_OF_GREEN_SLIME);
-    poly = polyfodder(obj);
-    grow = mlevelgain(obj);
-    heal = mhealup(obj);
-    eyes = (obj->otyp == CARROT);
-    corpsenm = (obj->otyp == CORPSE ? obj->corpsenm : NON_PM);
 
     if (devour) {
         if (mtmp->meating > 1)
@@ -272,7 +260,7 @@ dog_eat(struct monst *mtmp,
         obj = splitobj(obj, 1L);
     if (obj->unpaid)
         iflags.suppress_price++;
-    if (is_pool(x, y) && !Underwater) {
+    if (is_pool(mtmp->mx, mtmp->my) && !Underwater) {
         /* Don't print obj */
         /* TODO: Reveal presence of sea monster (especially sharks) */
     } else {
@@ -306,14 +294,6 @@ dog_eat(struct monst *mtmp,
         Strcpy(objnambuf, xname(obj));
         iflags.suppress_price--;
     }
-    /* some monsters that eat items could eat a container with contents */
-    if (Has_contents(obj))
-        meatbox(mtmp, obj);
-    /* It's a reward if it's DOGFOOD and the player dropped/threw it.
-       We know the player had it if invlet is set. -dlc */
-    if (dogfood(mtmp, obj) == DOGFOOD && obj->invlet)
-        edog->apport += (int) (200L / ((long) edog->dropdist + gm.moves
-                                       - edog->droptime));
     if (mtmp->data == &mons[PM_RUST_MONSTER] && obj->oerodeproof) {
         /* The object's rustproofing is gone now */
         if (obj->unpaid)
@@ -326,54 +306,24 @@ dog_eat(struct monst *mtmp,
                 pline("%s spits %s out in disgust!",
                       Monnam(mtmp), obj_name);
         }
-    } else if (obj == uball) {
-        unpunish();
-        delobj(obj); /* we assume this can't be unpaid */
-    } else if (obj == uchain) {
-        unpunish();
     } else {
+        /* It's a reward if it's DOGFOOD and the player dropped/threw it.
+           We know the player had it if invlet is set. -dlc */
+        if (dogfood(mtmp, obj) == DOGFOOD && obj->invlet)
+            edog->apport += (int) (200L / ((long) edog->dropdist + gm.moves
+                                           - edog->droptime));
         if (obj->unpaid) {
             /* edible item owned by shop has been thrown or kicked
                by hero and caught by tame or food-tameable monst */
             oprice = unpaid_cost(obj, TRUE);
             pline("That %s will cost you %ld %s.", objnambuf, oprice,
                   currency(oprice));
-            /* delobj->obfree will handle actual shop billing update */
+            /* m_consume_obj->delobj->obfree will handle actual shop billing update */
         }
-        delobj(obj);
+        m_consume_obj(mtmp, obj);
     }
 
-#if 0 /* pet is eating, so slime recovery is not feasible... */
-    /* turning into slime might be cureable */
-    if (slimer && munslime(mtmp, FALSE)) {
-        /* but the cure (fire directed at self) might be fatal */
-        if (DEADMONSTER(mtmp))
-            return 2;
-        slimer = FALSE; /* sliming is avoided, skip polymorph */
-    }
-#endif
-
-    if (poly || slimer) {
-        struct permonst *ptr = slimer ? &mons[PM_GREEN_SLIME] : 0;
-
-        (void) newcham(mtmp, ptr,
-                       cansee(mtmp->mx, mtmp->my) ? NC_SHOW_MSG : 0);
-    }
-
-    /* limit "instant" growth to prevent potential abuse */
-    if (grow && (int) mtmp->m_lev < (int) mtmp->data->mlevel + 15) {
-        if (!grow_up(mtmp, (struct monst *) 0))
-            return 2;
-    }
-    if (heal)
-        mtmp->mhp = mtmp->mhpmax;
-    if ((eyes || heal) && !mtmp->mcansee)
-        mcureblindness(mtmp, canseemon(mtmp));
-    if (deadmimic)
-        quickmimic(mtmp);
-    if (corpsenm != NON_PM)
-        mon_givit(mtmp, &mons[corpsenm]);
-    return 1;
+    return (DEADMONSTER(mtmp)) ? 2 : 1;
 }
 
 static void
@@ -904,6 +854,81 @@ best_target(struct monst *mtmp)   /* Pet */
     return best_targ;
 }
 
+/* Pet considers and maybe executes a ranged attack */
+static int
+pet_ranged_attk(struct monst *mtmp)
+{
+    struct monst *mtarg;
+    int hungry = 0;
+
+    /* How hungry is the pet? */
+    if (!mtmp->isminion) {
+        struct edog *dog = EDOG(mtmp);
+
+        hungry = (gm.moves > (dog->hungrytime + DOG_HUNGRY));
+    }
+
+    /* Identify the best target in a straight line from the pet;
+     * if there is such a target, we'll let the pet attempt an attack.
+     */
+    mtarg = best_target(mtmp);
+
+    /* Hungry pets are unlikely to use breath/spit attacks */
+    if (mtarg && (!hungry || !rn2(5))) {
+        int mstatus = MM_MISS;
+
+        if (mtarg == &gy.youmonst) {
+            if (mattacku(mtmp))
+                return MMOVE_DIED;
+            /* Treat this as the pet having initiated an attack even if it
+             * didn't, so it will lose its move.  This isn't entirely fair,
+             * but mattacku doesn't distinguish between "did not attack"
+             * and "attacked but didn't die" cases, and this is preferable
+             * to letting the pet attack the player and continuing to move.
+             */
+            mstatus = MM_HIT;
+        } else {
+            mstatus = mattackm(mtmp, mtarg);
+
+            /* Shouldn't happen, really */
+            if (mstatus & MM_AGR_DIED)
+                return MMOVE_DIED;
+
+            /* Allow the targeted nasty to strike back - if
+             * the targeted beast doesn't have a ranged attack,
+             * nothing will happen.
+             */
+            if ((mstatus & MM_HIT) && !(mstatus & MM_DEF_DIED)
+                && rn2(4) && mtarg != &gy.youmonst) {
+
+                /* Can monster see?  If it can, it can retaliate
+                 * even if the pet is invisible, since it'll see
+                 * the direction from which the ranged attack came;
+                 * if it's blind or unseeing, it can't retaliate
+                 */
+                if (mtarg->mcansee && haseyes(mtarg->data)) {
+                    mstatus = mattackm(mtarg, mtmp);
+                    if (mstatus & MM_DEF_DIED)
+                        return MMOVE_DIED;
+                }
+            }
+        }
+        /* Only return 3 if the pet actually made a ranged attack, and
+         * thus should lose the rest of its move.
+         * There's a chain of assumptions here:
+         * 1. score_targ and best_target will never select a monster
+         *    that can be attacked in melee, so the mattackm call can
+         *    only ever try ranged options
+         * 2. if the only attacks available to mattackm are ranged
+         *    options, and the monster cannot make a ranged attack, it
+         *    will return MM_MISS.
+         */
+        if (mstatus != MM_MISS)
+            return MMOVE_DONE;
+    }
+    return MMOVE_NOTHING;
+}
+
 /* Return values (same as m_move):
  * 0: did not move, but can still attack and do other stuff.
  * 1: moved, possibly can attack.
@@ -1180,76 +1205,8 @@ dog_move(register struct monst *mtmp,
      * now's the time for ranged attacks. Note that the pet can move
      * after it performs its ranged attack. Should this be changed?
      */
-    {
-        struct monst *mtarg;
-        int hungry = 0;
-
-        /* How hungry is the pet? */
-        if (!mtmp->isminion) {
-            struct edog *dog = EDOG(mtmp);
-
-            hungry = (gm.moves > (dog->hungrytime + DOG_HUNGRY));
-        }
-
-        /* Identify the best target in a straight line from the pet;
-         * if there is such a target, we'll let the pet attempt an attack.
-         */
-        mtarg = best_target(mtmp);
-
-        /* Hungry pets are unlikely to use breath/spit attacks */
-        if (mtarg && (!hungry || !rn2(5))) {
-            int mstatus = MM_MISS;
-
-            if (mtarg == &gy.youmonst) {
-                if (mattacku(mtmp))
-                    return MMOVE_DIED;
-                /* Treat this as the pet having initiated an attack even if it
-                 * didn't, so it will lose its move.  This isn't entirely fair,
-                 * but mattacku doesn't distinguish between "did not attack"
-                 * and "attacked but didn't die" cases, and this is preferable
-                 * to letting the pet attack the player and continuing to move.
-                 */
-                mstatus = MM_HIT;
-            } else {
-                mstatus = mattackm(mtmp, mtarg);
-
-                /* Shouldn't happen, really */
-                if (mstatus & MM_AGR_DIED)
-                    return MMOVE_DIED;
-
-                /* Allow the targeted nasty to strike back - if
-                 * the targeted beast doesn't have a ranged attack,
-                 * nothing will happen.
-                 */
-                if ((mstatus & MM_HIT) && !(mstatus & MM_DEF_DIED)
-                    && rn2(4) && mtarg != &gy.youmonst) {
-
-                    /* Can monster see?  If it can, it can retaliate
-                     * even if the pet is invisible, since it'll see
-                     * the direction from which the ranged attack came;
-                     * if it's blind or unseeing, it can't retaliate
-                     */
-                    if (mtarg->mcansee && haseyes(mtarg->data)) {
-                        mstatus = mattackm(mtarg, mtmp);
-                        if (mstatus & MM_DEF_DIED)
-                            return MMOVE_DIED;
-                    }
-                }
-            }
-            /* Only return 3 if the pet actually made a ranged attack, and
-             * thus should lose the rest of its move.
-             * There's a chain of assumptions here:
-             * 1. score_targ and best_target will never select a monster
-             *    that can be attacked in melee, so the mattackm call can
-             *    only ever try ranged options
-             * 2. if the only attacks available to mattackm are ranged
-             *    options, and the monster cannot make a ranged attack, it
-             *    will return MM_MISS.
-             */
-            if (mstatus != MM_MISS)
-                return MMOVE_DONE;
-        }
-    }
+    if ((i = pet_ranged_attk(mtmp)) != MMOVE_NOTHING)
+        return i;
 
  newdogpos:
     if (nix != omx || niy != omy) {
@@ -1332,7 +1289,7 @@ dog_move(register struct monst *mtmp,
 }
 
 /* check if a monster could pick up objects from a location */
-static boolean
+boolean
 could_reach_item(struct monst *mon, coordxy nx, coordxy ny)
 {
     if ((!is_pool(nx, ny) || is_swimmer(mon->data))
@@ -1427,7 +1384,7 @@ finish_meating(struct monst *mtmp)
     }
 }
 
-static void
+void
 quickmimic(struct monst *mtmp)
 {
     int idx = 0, trycnt = 5, spotted, seeloc;

@@ -17,6 +17,7 @@ static boolean danger_uprops(void);
 static int wipeoff(void);
 static int menu_drop(int);
 static NHFILE *currentlevel_rewrite(void);
+static void familiar_level_msg(void);
 static void final_level(void);
 
 /* static boolean badspot(coordxy,coordxy); */
@@ -109,6 +110,11 @@ boulder_hits_pool(
                           the(xname(otmp)), fills_up ? "fills" : "falls into",
                           what);
                 } else if (!Deaf) {
+                    if (lava) {
+                        Soundeffect(se_sizzling, 100);
+                    } else {
+                        Soundeffect(se_splash, 100);
+                    }
                     You_hear("a%s splash.", lava ? " sizzling" : "");
                 }
                 wake_nearto(rx, ry, 40);
@@ -223,6 +229,7 @@ flooreffects(struct obj *obj, coordxy x, coordxy y, const char *verb)
         }
         if (*verb) {
             if (Blind && u_at(x, y)) {
+                Soundeffect(se_crashing_boulder, 100);
                 You_hear("a CRASH! beneath you.");
             } else if (!Blind && cansee(x, y)) {
                 pline_The("boulder %s%s.",
@@ -233,6 +240,7 @@ flooreffects(struct obj *obj, coordxy x, coordxy y, const char *verb)
                               : (ttyp == HOLE) ? "plugs a hole"
                                                : "fills a pit");
             } else {
+                Soundeffect(se_boulder_drop, 100);
                 You_hear("a boulder %s.", verb);
             }
         }
@@ -268,11 +276,13 @@ flooreffects(struct obj *obj, coordxy x, coordxy y, const char *verb)
     } else if (u_at(x, y) && (t = t_at(x, y)) != 0
                && (uteetering_at_seen_pit(t) || uescaped_shaft(t))) {
         if (is_pit(t->ttyp)) {
-            if (Blind && !Deaf)
+            if (Blind && !Deaf) {
+                Soundeffect(se_item_tumble_downwards, 50);
                 You_hear("%s tumble downwards.", the(xname(obj)));
-            else
+            } else {
                 pline("%s into %s pit.", Tobjnam(obj, "tumble"),
                       the_your[t->madeby_u]);
+            }
         } else if (ship_object(obj, x, y, FALSE)) {
             /* ship_object will print an appropriate "the item falls
              * through the hole" message, so no need to do it here. */
@@ -457,6 +467,7 @@ dosinkring(struct obj *obj)
         pline("Static electricity surrounds the sink.");
         break;
     case RIN_CONFLICT:
+        Soundeffect(se_drain_noises, 50);
         You_hear("loud noises coming from the drain.");
         break;
     case RIN_SUSTAIN_ABILITY: /* KMH */
@@ -568,11 +579,12 @@ dosinkring(struct obj *obj)
             break;
         }
     }
-    if (ideed)
+    if (ideed) {
         trycall(obj);
-    else if (!nosink)
+    } else if (!nosink) {
+        Soundeffect(se_ring_in_drain, 50);
         You_hear("the ring bouncing down the drainpipe.");
-
+    }
     if (!rn2(20) && !nosink) {
         pline_The("sink backs up, leaving %s.", doname(obj));
         obj->in_use = FALSE;
@@ -912,6 +924,7 @@ menu_drop(int retry)
             } else if (pick_list[i].item.a_int == 'P') {
                 justpicked_quan = max(0, pick_list[i].count);
                 drop_justpicked = TRUE;
+                drop_everything = FALSE;
                 add_valid_menu_class(pick_list[i].item.a_int);
             } else {
                 add_valid_menu_class(pick_list[i].item.a_int);
@@ -1337,7 +1350,36 @@ u_collide_m(struct monst *mtmp)
     }
 }
 
-DISABLE_WARNING_FORMAT_NONLITERAL
+static void
+familiar_level_msg(void)
+{
+    static const char *const fam_msgs[4] = {
+        "You have a sense of deja vu.",
+        "You feel like you've been here before.",
+        "This place %s familiar...", 0 /* no message */
+    };
+    static const char *const halu_fam_msgs[4] = {
+        "Whoa!  Everything %s different.",
+        "You are surrounded by twisty little passages, all alike.",
+        "Gee, this %s like uncle Conan's place...", 0 /* no message */
+    };
+    const char *mesg;
+    char buf[BUFSZ];
+    int which = rn2(4);
+
+    if (Hallucination)
+        mesg = halu_fam_msgs[which];
+    else
+        mesg = fam_msgs[which];
+    if (mesg && strchr(mesg, '%')) {
+        DISABLE_WARNING_FORMAT_NONLITERAL
+        Sprintf(buf, mesg, !Blind ? "looks" : "seems");
+        RESTORE_WARNING_FORMAT_NONLITERAL
+        mesg = buf;
+    }
+    if (mesg)
+        pline1(mesg);
+}
 
 void
 goto_level(
@@ -1360,6 +1402,7 @@ goto_level(
     char *annotation;
     int dist = depth(newlevel) - depth(&u.uz);
     boolean do_fall_dmg = FALSE;
+    schar prev_temperature = gl.level.flags.temperature;
 
     if (dunlev(newlevel) > dunlevs_in_dungeon(newlevel))
         newlevel->dlevel = dunlevs_in_dungeon(newlevel);
@@ -1710,9 +1753,9 @@ goto_level(
 #ifdef MICRO
             display_nhwindow(WIN_MESSAGE, FALSE);
 #endif
+            Soundeffect(se_groans_and_moans, 25);
             You_hear("groans and moans everywhere.");
-        } else
-            hellish_smoke_mesg(); /* "It is hot here.  You smell smoke..." */
+        }
 
         record_achievement(ACH_HELL); /* reached Gehennom */
     }
@@ -1720,32 +1763,8 @@ goto_level(
     if (Inhell && !Is_valley(&u.uz))
         u.uevent.gehennom_entered = 1;
 
-    if (familiar) {
-        static const char *const fam_msgs[4] = {
-            "You have a sense of deja vu.",
-            "You feel like you've been here before.",
-            "This place %s familiar...", 0 /* no message */
-        };
-        static const char *const halu_fam_msgs[4] = {
-            "Whoa!  Everything %s different.",
-            "You are surrounded by twisty little passages, all alike.",
-            "Gee, this %s like uncle Conan's place...", 0 /* no message */
-        };
-        const char *mesg;
-        char buf[BUFSZ];
-        int which = rn2(4);
-
-        if (Hallucination)
-            mesg = halu_fam_msgs[which];
-        else
-            mesg = fam_msgs[which];
-        if (mesg && strchr(mesg, '%')) {
-            Sprintf(buf, mesg, !Blind ? "looks" : "seems");
-            mesg = buf;
-        }
-        if (mesg)
-            pline1(mesg);
-    }
+    if (familiar)
+        familiar_level_msg();
 
     /* special location arrival messages/events */
     if (In_endgame(&u.uz)) {
@@ -1759,13 +1778,11 @@ goto_level(
         }
     } else if (In_quest(&u.uz)) {
         onquest(); /* might be reaching locate|goal level */
-    } else if (In_V_tower(&u.uz)) {
-        if (newdungeon && In_hell(&u.uz0))
-            pline_The("heat and smoke are gone.");
     } else if (Is_knox(&u.uz)) {
         /* alarm stops working once Croesus has died */
         if (new || !gm.mvitals[PM_CROESUS].died) {
             You("have penetrated a high security area!");
+            Soundeffect(se_alarm, 100);
             pline("An alarm sounds!");
             for (mtmp = fmon; mtmp; mtmp = mtmp->nmon) {
                 if (DEADMONSTER(mtmp))
@@ -1801,6 +1818,17 @@ goto_level(
                                             : "quest_portal_again");
             }
         }
+    }
+
+    if (prev_temperature != gl.level.flags.temperature) {
+        if (gl.level.flags.temperature)
+            hellish_smoke_mesg();
+        else if (prev_temperature > 0)
+            pline_The("heat %s gone.",
+                      In_hell(&u.uz0)
+                      ? "and smoke are" : "is");
+        else if (prev_temperature < 0)
+            You("are out of the cold.");
     }
 
     /* this was originally done earlier; moved here to be logged after
@@ -1851,15 +1879,17 @@ goto_level(
     return;
 }
 
-RESTORE_WARNING_FORMAT_NONLITERAL
-
 /* give a message when entering a Gehennom level other than the Valley;
    also given if restoring a game in that situation */
 void
 hellish_smoke_mesg(void)
 {
-    if (Inhell && !Is_valley(&u.uz))
-        pline("It is hot here.  You %s smoke...",
+    if (gl.level.flags.temperature)
+        pline("It is %s here.",
+              gl.level.flags.temperature > 0 ? "hot" : "cold");
+
+    if (In_hell(&u.uz) && gl.level.flags.temperature > 0)
+        pline("You %s smoke...",
               olfaction(gy.youmonst.data) ? "smell" : "sense");
 }
 
@@ -2050,8 +2080,10 @@ revive_corpse(struct obj *corpse)
                     pline("%s claws itself out of the ground!",
                           canspotmon(mtmp) ? Amonnam(mtmp) : Something);
                     newsym(mtmp->mx, mtmp->my);
-                } else if (mdistu(mtmp) < 5*5)
+                } else if (mdistu(mtmp) < 5*5) {
+                    Soundeffect(se_scratching, 50);
                     You_hear("scratching noises.");
+                }
                 break;
             }
             /*FALLTHRU*/

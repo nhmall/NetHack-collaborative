@@ -153,14 +153,57 @@ x.....x
 .......
 x.....x]], contents = function() end  });
    end,
+   function ()
+      des.map({ halign = rnd_halign(), valign = rnd_valign(), map = [[
+BBBBBBB
+B.....B
+B.....B
+B.....B
+B.....B
+B.....B
+BBBBBBB]], contents = function()
+   des.region({ region={2,2, 2,2}, type="temple", filled=1, irregular=1 });
+   des.altar({ x=3, y=3, align="noalign", type=percent(75) and "altar" or "shrine" });
+      end  });
+   end,
+   function ()
+      des.map({ halign = rnd_halign(), valign = rnd_valign(), map = [[
+..........
+..........
+..........
+...FFFF...
+...F..F...
+...F..F...
+...FFFF...
+..........
+..........
+..........]], contents = function()
+   local mons = { "Angel", "D", "H", "L" };
+   des.monster(mons[math.random(1, #mons)], 4,4);
+      end });
+   end,
+
+   function ()
+      des.map({ halign = rnd_halign(), valign = rnd_valign(), map = [[
+.........
+.}}}}}}}.
+.}}---}}.
+.}--.--}.
+.}|...|}.
+.}--.--}.
+.}}---}}.
+.}}}}}}}.
+.........
+]], contents = function(rm)
+   des.monster("L",04,04)
+      end })
+   end,
 };
 
 function rnd_hell_prefab()
    local pf = math.random(1, #hell_prefabs);
    hell_prefabs[pf]();
 end
-
--- TODO: cold hells? (ice & water instead of lava. sometimes floor = ice)
 
 hells = {
    -- 1: "mines" style with lava
@@ -228,6 +271,29 @@ hells = {
          des.terrain(outside_walls, " ");  -- return the outside back to solid wall
       end
    end,
+
+   -- 6: cold maze, with ice and water
+   function ()
+      local cwid = math.random(4);
+      des.level_init({ style = "solidfill", fg = " ", lit = 0 });
+      des.level_flags("mazelevel", "noflip", "cold");
+      des.level_init({ style = "maze", wallthick = 1, corrwid = cwid });
+      local outside_walls = selection.match(" ");
+      local icey = selection.negate():percentage(10):grow():filter_mapchar(".");
+      des.terrain(icey, "I");
+      if (cwid == 1 and percent(25)) then
+         rnd_hell_prefab();
+      end
+      if (cwid > 1) then
+         -- turn some ice into wall of water
+         des.terrain(icey:percentage(1), "W");
+      end
+      des.terrain(icey:percentage(5), "P");
+      if (percent(25)) then
+         des.terrain(selection.match("w"), "W"); -- walls of water
+      end
+      des.terrain(outside_walls, " ");  -- return the outside back to solid wall
+   end,
 };
 
 local hellno = math.random(1, #hells);
@@ -236,6 +302,10 @@ hells[hellno]();
 --
 
 des.stair("up")
-des.stair("down")
+if (u.invocation_level) then
+   des.trap("vibrating square");
+else
+   des.stair("down")
+end
 
 populatemaze();

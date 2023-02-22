@@ -1349,10 +1349,16 @@ seffect_scare_monster(struct obj **sobjp)
                 ct++; /* pets don't laugh at you */
         }
     }
-    if (otyp == SCR_SCARE_MONSTER || !ct)
+    if (otyp == SCR_SCARE_MONSTER || !ct) {
+        if (confused || scursed) {
+            Soundeffect(se_sad_wailing, 50);
+        } else {
+            Soundeffect(se_maniacal_laughter, 50);
+        }
         You_hear("%s %s.", (confused || scursed) ? "sad wailing"
                  : "maniacal laughter",
                  !ct ? "in the distance" : "close by");
+    }
 }
 
 static void
@@ -2727,6 +2733,7 @@ do_genocide(
                      */
                     if (Verbose(3, do_genocide))
                         pline("A thunderous voice booms through the caverns:");
+                    SetVoice((struct monst *) 0, 0, 80, voice_deity);
                     verbalize("No, mortal!  That will not be done.");
                 }
                 continue;
@@ -2967,7 +2974,7 @@ create_particular_parse(
         d->saddled = TRUE;
         (void) memset(tmpp, ' ', sizeof "saddled " - 1);
     }
-    /* state -- limited number of possibilitie supported */
+    /* state -- limited number of possibilities supported */
     if ((tmpp = strstri(bufp, "sleeping ")) != 0) {
         d->sleeping = TRUE;
         (void) memset(tmpp, ' ', sizeof "sleeping " - 1);

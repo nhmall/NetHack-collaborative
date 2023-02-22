@@ -2309,6 +2309,7 @@ void
 record_achievement(schar achidx)
 {
     int i, absidx;
+    int repeat_achievement = 0;
 
     absidx = abs(achidx);
     /* valid achievements range from 1 to N_ACH-1; however, ranks can be
@@ -2325,8 +2326,21 @@ record_achievement(schar achidx)
        an attempt to duplicate an achievement can happen if any of Bell,
        Candelabrum, Book, or Amulet is dropped then picked up again */
     for (i = 0; u.uachieved[i]; ++i)
-        if (abs(u.uachieved[i]) == absidx)
-            return; /* already recorded, don't duplicate it */
+        if (abs(u.uachieved[i]) == absidx) {
+            repeat_achievement = 1;
+            break;
+        }
+
+    /*
+     * We do the sound for an achievement, even if it has already been
+     * achieved before. Some players might have set up level-based
+     * theme music or something. We do let the sound interface know
+     * that it's not the original achievement though.
+     */
+    SoundAchievement(achidx, 0, repeat_achievement);
+
+    if (repeat_achievement)
+        return; /* already recorded, don't duplicate it */
     u.uachieved[i] = achidx;
 
     /* avoid livelog for achievements recorded during final disclosure:
@@ -2812,7 +2826,7 @@ list_vanquished(char defquery, boolean ask)
      * which needs putstr() and past tense.
      */
     } else if (!gp.program_state.gameover) {
-        /* #dovanquished rather than final disclosure, so pline() is ok */
+        /* #vanquished rather than final disclosure, so pline() is ok */
         pline("No creatures have been vanquished.");
 #ifdef DUMPLOG
     } else if (dumping) {
@@ -2838,6 +2852,7 @@ num_genocides(void)
     return n;
 }
 
+/* return a count of the number of extinct species */
 static int
 num_extinct(void)
 {
@@ -2852,6 +2867,8 @@ num_extinct(void)
     return n;
 }
 
+/* show genocided and extinct monster types for final disclosure/dumplog
+   or for the #genocided command */
 void
 list_genocided(char defquery, boolean ask)
 {
@@ -2919,11 +2936,24 @@ list_genocided(char defquery, boolean ask)
             display_nhwindow(klwin, TRUE);
             destroy_nhwindow(klwin);
         }
+
+    /* See the comment for similar code near the end of list_vanquished(). */
+    } else if (!gp.program_state.gameover) {
+        /* #genocided rather than final disclosure, so pline() is ok */
+        pline("No creatures have been genocided or become extinct.");
 #ifdef DUMPLOG
     } else if (dumping) {
         putstr(0, 0, "No species were genocided or became extinct.");
 #endif
     }
+}
+
+/* M-g - #genocided command */
+int
+dogenocided(void)
+{
+    list_genocided('y', FALSE);
+    return ECMD_OK;
 }
 
 /*

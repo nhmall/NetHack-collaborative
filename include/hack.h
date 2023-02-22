@@ -227,6 +227,7 @@ enum misc_arti_nums {
 #include "region.h"
 #include "trap.h"
 #include "display.h"
+#include "sndprocs.h"
 #include "decl.h"
 #include "timeout.h"
 
@@ -496,6 +497,8 @@ typedef uint32_t mmflags_nht;     /* makemon MM_ flags */
 #define OVERRIDE_MSGTYPE 2
 #define SUPPRESS_HISTORY 4
 #define URGENT_MESSAGE   8
+#define PLINE_VERBALIZE 16
+#define PLINE_SPEECH    32
 
 /* get_count flags */
 #define GC_NOFLAGS   0
@@ -516,6 +519,7 @@ enum nhcore_calls {
     NHCORE_RESTORE_OLD_GAME,
     NHCORE_MOVELOOP_TURN,
     NHCORE_GAME_EXIT,
+    NHCORE_GETPOS_TIP,
 
     NUM_NHCORE_CALLS
 };
@@ -594,11 +598,12 @@ enum bodypart_types {
 /* flags for hero_breaks() and hits_bars(); BRK_KNOWN* let callers who have
    already called breaktest() prevent it from being called again since it
    has a random factor which makes it be non-deterministic */
-#define BRK_BY_HERO        1
-#define BRK_FROM_INV       2
-#define BRK_KNOWN2BREAK    4
-#define BRK_KNOWN2NOTBREAK 8
+#define BRK_BY_HERO        0x01
+#define BRK_FROM_INV       0x02
+#define BRK_KNOWN2BREAK    0x04
+#define BRK_KNOWN2NOTBREAK 0x08
 #define BRK_KNOWN_OUTCOME  (BRK_KNOWN2BREAK | BRK_KNOWN2NOTBREAK)
+#define BRK_MELEE          0x10
 
 /* extended command return values */
 #define ECMD_OK     0x00 /* cmd done successfully */

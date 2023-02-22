@@ -1648,9 +1648,9 @@ create_subroom(
     if (h == -1)
         h = rnd(height - 3);
     if (x == -1)
-        x = rnd(width - w - 1) - 1;
+        x = rnd(width - w);
     if (y == -1)
-        y = rnd(height - h - 1) - 1;
+        y = rnd(height - h);
     if (x == 1)
         x = 0;
     if (y == 1)
@@ -1776,7 +1776,11 @@ create_trap(spltrap* t, struct mkroom* croom)
     coord tm;
     int mktrap_flags = MKTRAP_MAZEFLAG;
 
-    if (croom) {
+    if (t->type == VIBRATING_SQUARE) {
+        pick_vibrasquare_location();
+        maketrap(gi.inv_pos.x, gi.inv_pos.y, VIBRATING_SQUARE);
+        return;
+    } else if (croom) {
         get_free_room_loc(&x, &y, croom, t->coord);
     } else {
         int trycnt = 0;
@@ -2213,6 +2217,9 @@ create_object(object* o, struct mkroom* croom)
             otmp->oeroded = (o->eroded % 4);
             otmp->oeroded2 = ((o->eroded >> 2) % 4);
         }
+    } else {
+        otmp->oeroded = otmp->oeroded2 = 0;
+        otmp->oerodeproof = 0;
     }
     if (o->recharged)
         otmp->recharged = (o->recharged % 8);
@@ -2226,6 +2233,9 @@ create_object(object* o, struct mkroom* croom)
         otmp->otrapped = o->trapped;
     if (o->greased)
         otmp->greased = 1;
+    else {
+        otmp->greased = 0;
+    }
 
     if (o->quan > 0 && objects[otmp->otyp].oc_merge) {
         otmp->quan = o->quan;
@@ -3694,6 +3704,12 @@ lspo_level_flags(lua_State *L)
             gc.coder->allow_flips &= ~1;
         else if (!strcmpi(s, "noflip"))
             gc.coder->allow_flips = 0;
+        else if (!strcmpi(s, "temperate"))
+            gl.level.flags.temperature = 0;
+        else if (!strcmpi(s, "hot"))
+            gl.level.flags.temperature = 1;
+        else if (!strcmpi(s, "cold"))
+            gl.level.flags.temperature = -1;
         else {
             char buf[BUFSZ];
             Sprintf(buf, "Unknown level flag %s", s);
@@ -4945,18 +4961,18 @@ selection_do_ellipse(
     }
 }
 
-/* distance from line segment (x1,y1, x2,y2) to point (x3,y3) */
+/* square of distance from line segment (x1,y1, x2,y2) to point (x3,y3) */
 static long
 line_dist_coord(long x1, long y1, long x2, long y2, long x3, long y3)
 {
     long px = x2 - x1;
     long py = y2 - y1;
     long s = px * px + py * py;
-    long x, y, dx, dy, dist = 0;
+    long x, y, dx, dy, distsq = 0;
     float lu = 0;
 
     if (x1 == x2 && y1 == y2)
-        return isqrt(dist2(x1, y1, x3, y3));
+        return dist2(x1, y1, x3, y3);
 
     lu = ((x3 - x1) * px + (y3 - y1) * py) / (float) s;
     if (lu > 1)
@@ -4968,18 +4984,19 @@ line_dist_coord(long x1, long y1, long x2, long y2, long x3, long y3)
     y = y1 + lu * py;
     dx = x - x3;
     dy = y - y3;
-    dist = isqrt(dx * dx + dy * dy);
+    distsq = dx * dx + dy * dy;
 
-    return dist;
+    return distsq;
 }
 
+/* guts of l_selection_gradient */
 void
 selection_do_gradient(
     struct selectionvar *ov,
     long x, long y,
     long x2,long y2,
     long gtyp,
-    long mind, long maxd, long limit)
+    long mind, long maxd)
 {
     long dx, dy, dofs;
 
@@ -4989,7 +5006,7 @@ selection_do_gradient(
         maxd = tmp;
     }
 
-    dofs = maxd - mind;
+    dofs = maxd * maxd - mind * mind;
     if (dofs < 1)
         dofs = 1;
 
@@ -5001,10 +5018,9 @@ selection_do_gradient(
         for (dx = 0; dx < COLNO; dx++)
             for (dy = 0; dy < ROWNO; dy++) {
                 long d0 = line_dist_coord(x, y, x2, y2, dx, dy);
-                if (d0 >= mind && (!limit || d0 <= maxd)) {
-                    if (d0 - mind > rn2(dofs))
-                        selection_setpoint(dx, dy, ov, 1);
-                }
+                if (d0 <= mind * mind
+                    || (d0 <= maxd * maxd && d0 - mind * mind < rn2(dofs)))
+                    selection_setpoint(dx, dy, ov, 1);
             }
         break;
     }
@@ -5018,10 +5034,9 @@ selection_do_gradient(
                 long d5 = line_dist_coord(x, y, x2, y2, dx, dy);
                 long d0 = min(d5, min(max(d1, d2), max(d3, d4)));
 
-                if (d0 >= mind && (!limit || d0 <= maxd)) {
-                    if (d0 - mind > rn2(dofs))
-                        selection_setpoint(dx, dy, ov, 1);
-                }
+                if (d0 <= mind * mind
+                    || (d0 <= maxd * maxd && d0 - mind * mind < rn2(dofs)))
+                    selection_setpoint(dx, dy, ov, 1);
             }
         break;
     } /*case*/
@@ -5871,7 +5886,8 @@ levregion_add(lev_region* lregion)
 /* get params from topmost lua hash:
    - region = {x1,y1,x2,y2}
    - exclude = {x1,y1,x2,y2} (optional)
-   - region_islev=true, exclude_idlev=true (optional) */
+   - region_islev=true, exclude_islev=true (optional)
+   - negative x and y are invalid */
 static void
 l_get_lregion(lua_State *L, lev_region *tmplregion)
 {
@@ -5883,7 +5899,7 @@ l_get_lregion(lua_State *L, lev_region *tmplregion)
     tmplregion->inarea.x2 = x2;
     tmplregion->inarea.y2 = y2;
 
-    x1 = y1 = x2 = y2 = 0;
+    x1 = y1 = x2 = y2 = -1;
     get_table_region(L, "exclude", &x1, &y1, &x2, &y2, TRUE);
     tmplregion->delarea.x1 = x1;
     tmplregion->delarea.y1 = y1;
@@ -5892,6 +5908,13 @@ l_get_lregion(lua_State *L, lev_region *tmplregion)
 
     tmplregion->in_islev = get_table_boolean_opt(L, "region_islev", 0);
     tmplregion->del_islev = get_table_boolean_opt(L, "exclude_islev", 0);
+
+    /* if x1 is still negative, exclude wasn't specified, so we should treat it
+     * as if there is no exclude region at all. Force exclude_islev to true so
+     * the -1,-1,-1,-1 region is safely off the map and won't interfere with
+     * branch or portal placement. */
+    if (x1 < 0)
+        tmplregion->del_islev = TRUE;
 }
 
 /* teleport_region({ region = { x1,y1, x2,y2} }); */
@@ -6798,6 +6821,7 @@ sp_level_coder_init(void)
     (void) memset((genericptr_t) SpLev_Map, 0, sizeof SpLev_Map);
 
     gl.level.flags.is_maze_lev = 0;
+    gl.level.flags.temperature = In_hell(&u.uz) ? 1 : 0;
 
     reset_xystart_size();
 

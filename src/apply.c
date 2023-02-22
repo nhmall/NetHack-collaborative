@@ -47,9 +47,9 @@ static boolean get_valid_jump_position(coordxy, coordxy);
 static boolean get_valid_polearm_position(coordxy, coordxy);
 static boolean find_poleable_mon(coord *, int, int);
 
-static const char Nothing_seems_to_happen[] = "Nothing seems to happen.";
-static const char no_elbow_room[] =
-    "don't have enough elbow-room to maneuver.";
+static const char
+    Nothing_seems_to_happen[] = "Nothing seems to happen.",
+    no_elbow_room[] = "don't have enough elbow-room to maneuver.";
 
 static int
 use_camera(struct obj *obj)
@@ -343,18 +343,22 @@ use_stethoscope(struct obj *obj)
         mstatusline(u.ustuck);
         return res;
     } else if (u.dz) {
-        if (Underwater)
+        if (Underwater) {
+            Soundeffect(se_faint_splashing, 35);
             You_hear("faint splashing.");
-        else if (u.dz < 0 || !can_reach_floor(TRUE))
+        } else if (u.dz < 0 || !can_reach_floor(TRUE)) {
             cant_reach_floor(u.ux, u.uy, (u.dz < 0), TRUE);
-        else if (its_dead(u.ux, u.uy, &res))
+        } else if (its_dead(u.ux, u.uy, &res)) {
             ; /* message already given */
-        else if (Is_stronghold(&u.uz))
+        } else if (Is_stronghold(&u.uz)) {
+            Soundeffect(se_crackling_of_hellfire, 35);
             You_hear("the crackling of hellfire.");
-        else
+        } else {
             pline_The("%s seems healthy enough.", surface(u.ux, u.uy));
+        }
         return res;
     } else if (obj->cursed && !rn2(2)) {
+        Soundeffect(se_heart_beat, 100);
         You_hear("your heart beat.");
         return res;
     }
@@ -366,6 +370,7 @@ use_stethoscope(struct obj *obj)
     rx = u.ux + u.dx;
     ry = u.uy + u.dy;
     if (!isok(rx, ry)) {
+        Soundeffect(se_typing_noise, 100);
         You_hear("a faint typing noise.");
         return ECMD_OK;
     }
@@ -431,6 +436,7 @@ use_stethoscope(struct obj *obj)
     lev = &levl[rx][ry];
     switch (lev->typ) {
     case SDOOR:
+        Soundeffect(se_hollow_sound, 100);
         You_hear(hollow_str, "door");
         cvt_sdoor_to_door(lev); /* ->typ = DOOR */
         feel_newsym(rx, ry);
@@ -463,6 +469,7 @@ use_whistle(struct obj *obj)
             You_feel("rushing air tickle your %s.", body_part(NOSE));
         else
             You(whistle_str, obj->cursed ? "shrill" : "high");
+        Soundeffect(se_shrill_whistle, 50);
         wake_nearby();
         if (obj->cursed)
             vault_summon_gd();
@@ -484,7 +491,7 @@ use_magic_whistle(struct obj *obj)
             Hallucination ? "normal"
             : (Underwater && !Deaf) ? "strange, high-pitched"
               : "strange");
-
+        Soundeffect(se_shrill_whistle, 80);
         magic_whistled(obj);
     }
 }
@@ -1044,8 +1051,9 @@ use_mirror(struct obj *obj)
     }
     if (Underwater) {
         if (useeit)
-            You(Hallucination ? "give the fish a chance to fix their makeup."
-                              : "reflect the murky water.");
+            You("%s.",
+                Hallucination ? "give the fish a chance to fix their makeup"
+                              : "reflect the murky water");
         return ECMD_TIME;
     }
     if (u.dz) {
@@ -1168,6 +1176,7 @@ use_bell(struct obj **optr)
                         && invocation_pos(u.ux, u.uy)
                         && !On_stairs(u.ux, u.uy));
 
+    Hero_playnotes(obj_to_instr(obj), "C", 100);
     You("ring %s.", the(xname(obj)));
 
     if (Underwater || (u.uswallow && ordinary)) {
@@ -1184,8 +1193,8 @@ use_bell(struct obj **optr)
             && !(gm.mvitals[PM_WOOD_NYMPH].mvflags & G_GONE)
             && !(gm.mvitals[PM_WATER_NYMPH].mvflags & G_GONE)
             && !(gm.mvitals[PM_MOUNTAIN_NYMPH].mvflags & G_GONE)
-            && (mtmp = makemon(mkclass(S_NYMPH, 0), u.ux, u.uy, NO_MINVENT|MM_NOMSG))
-                   != 0) {
+            && (mtmp = makemon(mkclass(S_NYMPH, 0), u.ux, u.uy,
+                               NO_MINVENT | MM_NOMSG)) != 0) {
             You("summon %s!", a_monnam(mtmp));
             if (!obj_resists(obj, 93, 100)) {
                 pline("%s shattered!", Tobjnam(obj, "have"));
@@ -1400,11 +1409,15 @@ use_candle(struct obj **optr)
             pline_The("new %s magically %s!", s, vtense(s, "ignite"));
         else if (!otmp->lamplit && was_lamplit)
             pline("%s out.", (obj->quan > 1L) ? "They go" : "It goes");
-        if (obj->unpaid)
+        if (obj->unpaid) {
+            struct monst *shkp VOICEONLY = shop_keeper(*in_rooms(u.ux, u.uy, SHOPBASE));
+
+            SetVoice(shkp, 0, 80, 0);
             verbalize("You %s %s, you bought %s!",
                       otmp->lamplit ? "burn" : "use",
                       (obj->quan > 1L) ? "them" : "it",
                       (obj->quan > 1L) ? "them" : "it");
+        }
         if (obj->quan < 7L && otmp->spe == 7)
             pline("%s now has seven%s candles attached.", The(xname(otmp)),
                   otmp->lamplit ? " lit" : "");
@@ -1554,8 +1567,11 @@ catch_lit(struct obj *obj)
         if (obj->otyp == POT_OIL)
             makeknown(obj->otyp);
         if (carried(obj) && obj->unpaid && costly_spot(u.ux, u.uy)) {
+            struct monst *shkp VOICEONLY = shop_keeper(*in_rooms(u.ux, u.uy, SHOPBASE));
+
             /* if it catches while you have it, then it's your tough luck */
             check_unpaid(obj);
+            SetVoice(shkp, 0, 80, 0);
             verbalize("That's in addition to the cost of %s %s, of course.",
                       yname(obj),
                       (obj->quan == 1L) ? "itself" : "themselves");
@@ -1592,8 +1608,9 @@ use_lamp(struct obj *obj)
         return;
     }
     if (Underwater) {
-        pline(!Is_candle(obj) ? "This is not a diving lamp"
-                              : "Sorry, fire and water don't mix.");
+        pline("%s.",
+              !Is_candle(obj) ? "This is not a diving lamp"
+                              : "Sorry, fire and water don't mix");
         return;
     }
     /* magic lamps with an spe == 0 (wished for) cannot be lit */
@@ -1630,7 +1647,9 @@ use_lamp(struct obj *obj)
             if (obj->unpaid && costly_spot(u.ux, u.uy)
                 && obj->age == 20L * (long) objects[obj->otyp].oc_cost) {
                 const char *ithem = (obj->quan > 1L) ? "them" : "it";
+                struct monst *shkp VOICEONLY = shop_keeper(*in_rooms(u.ux, u.uy, SHOPBASE));
 
+                SetVoice(shkp, 0, 80, 0);
                 verbalize("You burn %s, you bought %s!", ithem, ithem);
                 bill_dummy_object(obj);
             }
@@ -1675,10 +1694,13 @@ light_cocktail(struct obj **optr)
         Blind ? "" : "  It gives off a dim light.");
 
     if (obj->unpaid && costly_spot(u.ux, u.uy)) {
+        struct monst *shkp VOICEONLY = shop_keeper(*in_rooms(u.ux, u.uy, SHOPBASE));
+
         /* Normally, we shouldn't both partially and fully charge
          * for an item, but (Yendorian Fuel) Taxes are inevitable...
          */
         check_unpaid(obj);
+        SetVoice(shkp, 0, 80, 0);
         verbalize("That's in addition to the cost of the potion, of course.");
         bill_dummy_object(obj);
     }
@@ -2131,12 +2153,21 @@ use_tinning_kit(struct obj *obj)
         /* Mark tinned tins. No spinach allowed... */
         set_tin_variety(can, HOMEMADE_TIN);
         if (carried(corpse)) {
-            if (corpse->unpaid)
+            if (corpse->unpaid) {
+                struct monst *shkp VOICEONLY = shop_keeper(*in_rooms(
+                                                       u.ux, u.uy, SHOPBASE));
+
+                SetVoice(shkp, 0, 80, 0);
                 verbalize(you_buy_it);
+            }
             useup(corpse);
         } else {
-            if (costly_spot(corpse->ox, corpse->oy) && !corpse->no_charge)
+            if (costly_spot(corpse->ox, corpse->oy) && !corpse->no_charge) {
+                struct monst *shkp VOICEONLY = shop_keeper(*in_rooms(corpse->ox,
+                                                 corpse->oy, SHOPBASE));
+                SetVoice(shkp, 0, 80, 0);
                 verbalize(you_buy_it);
+            }
             useupf(corpse, 1L);
         }
         (void) hold_another_object(can, "You make, but cannot pick up, %s.",
@@ -2900,6 +2931,12 @@ use_whip(struct obj *obj)
     } else if (u.dz < 0) {
         You("flick a bug off of the %s.", ceiling(u.ux, u.uy));
 
+    } else if (!u.dz && (IS_WATERWALL(levl[rx][ry].typ)
+                         || levl[rx][ry].typ == LAVAWALL)) {
+        You("cause a small splash.");
+        if (levl[rx][ry].typ == LAVAWALL)
+            (void) fire_damage(uwep, FALSE, rx, ry);
+        return ECMD_TIME;
     } else if ((!u.dx && !u.dy) || (u.dz > 0)) {
         int dam;
 
@@ -2909,7 +2946,9 @@ use_whip(struct obj *obj)
             kick_steed();
             return ECMD_TIME;
         }
-        if (is_pool_or_lava(u.ux, u.uy)) {
+        if (is_pool_or_lava(u.ux, u.uy)
+            || IS_WATERWALL(levl[rx][ry].typ)
+            || levl[rx][ry].typ == LAVAWALL) {
             You("cause a small splash.");
             if (is_lava(u.ux, u.uy))
                 (void) fire_damage(uwep, FALSE, u.ux, u.uy);
@@ -3757,6 +3796,7 @@ do_break_wand(struct obj *obj)
         goto discard_broken_wand;
     case WAN_STRIKING:
         /* we want this before the explosion instead of at the very end */
+        Soundeffect(se_wall_of_force, 65);
         pline("A wall of force smashes down around you!");
         dmg = d(1 + obj->spe, 6); /* normally 2d12 */
         /*FALLTHRU*/
@@ -4202,14 +4242,18 @@ flip_through_book(struct obj *obj)
     You("flip through the pages of %s.", thesimpleoname(obj));
 
     if (obj->otyp == SPE_BOOK_OF_THE_DEAD) {
-        if (!Deaf)
+        if (!Deaf) {
+            if (!Hallucination) {
+                Soundeffect(se_rustling_paper, 50);
+            }
             You_hear("the pages make an unpleasant %s sound.",
                      Hallucination ? "chuckling"
                                    : "rustling");
-        else if (!Blind)
+        } else if (!Blind) {
             You_see("the pages glow faintly %s.", hcolor(NH_RED));
-        else
+        } else {
             You_feel("the pages tremble.");
+        }
     } else if (Blind) {
         pline("The pages feel %s.",
               Hallucination ? "freshly picked"

@@ -1,4 +1,4 @@
-/* NetHack 3.7	invent.c	$NHDT-Date: 1661240719 2022/08/23 07:45:19 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.424 $ */
+/* NetHack 3.7	invent.c	$NHDT-Date: 1672827802 2023/01/04 10:23:22 $  $NHDT-Branch: naming-overflow-fix $:$NHDT-Revision: 1.439 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Derek S. Ray, 2015. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -40,6 +40,8 @@ static int doorganize_core(struct obj *);
 static char obj_to_let(struct obj *);
 static boolean item_naming_classification(struct obj *, char *, char *);
 static int item_reading_classification(struct obj *, char *);
+static void ia_addmenu(winid, int, char, const char *);
+static void itemactions_pushkeys(struct obj *, int);
 static void mime_action(const char *);
 
 /* enum and structs are defined in wintype.h */
@@ -1016,8 +1018,11 @@ DISABLE_WARNING_FORMAT_NONLITERAL
  * touch_artifact will print its own messages if they are warranted.
  */
 struct obj *
-hold_another_object(struct obj *obj, const char *drop_fmt,
-                    const char *drop_arg, const char *hold_msg)
+hold_another_object(
+    struct obj *obj, /* object to be held */
+    const char *drop_fmt, /* format string for message if it can't be held */
+    const char *drop_arg, /* argument to use when formatting message */
+    const char *hold_msg) /* message to display if successfully held */
 {
     char buf[BUFSZ];
 
@@ -2564,17 +2569,21 @@ prinv(const char *prefix, struct obj *obj, long quan)
 DISABLE_WARNING_FORMAT_NONLITERAL
 
 char *
-xprname(struct obj *obj,
-        const char *txt, /* text to print instead of obj */
-        char let,        /* inventory letter */
-        boolean dot,     /* append period; (dot && cost => Iu) */
-        long cost,       /* cost (for inventory of unpaid or expended items) */
-        long quan)       /* if non-0, print this quantity, not obj->quan */
+xprname(
+    struct obj *obj,
+    const char *txt, /* text to print instead of obj */
+    char let,        /* inventory letter */
+    boolean dot,     /* append period; (dot && cost => Iu) */
+    long cost,       /* cost (for inventory of unpaid or expended items) */
+    long quan)       /* if non-0, print this quantity, not obj->quan */
 {
     static char li[BUFSZ];
+    char suffix[80]; /* plenty of room for count and hallucinatory currency */
+    int sfxlen, txtlen; /* signed int for %*s formatting */
+    const char *fmt;
     boolean use_invlet = (flags.invlet_constant
                           && let != CONTAINED_SYM && let != HANDS_SYM);
-    long savequan = 0;
+    long savequan = 0L;
 
     if (quan && obj) {
         savequan = obj->quan;
@@ -2586,18 +2595,33 @@ xprname(struct obj *obj,
      *  *  Then obj == null and we are printing a total amount.
      *  >  Then the object is contained and doesn't have an inventory letter.
      */
-    if (cost != 0 || let == '*') {
+    fmt = "%c - %.*s%s";
+    if (!txt)
+        txt = doname(obj);
+    txtlen = (int) strlen(txt);
+
+    if (cost != 0L || let == '*') {
         /* if dot is true, we're doing Iu, otherwise Ix */
-        Sprintf(li,
-                iflags.menu_tab_sep ? "%c - %s\t%6ld %s"
-                                    : "%c - %-45s %6ld %s",
-                (dot && use_invlet ? obj->invlet : let),
-                (txt ? txt : doname(obj)), cost, currency(cost));
+        if (dot && use_invlet)
+            let = obj->invlet;
+        Sprintf(suffix, "%c%6ld %.50s", iflags.menu_tab_sep ? '\t' : ' ',
+                cost, currency(cost));
+        if (!iflags.menu_tab_sep) {
+            fmt = "%c - %-45.*s%s";
+            if (txtlen < 45)
+                txtlen = 45;
+        }
     } else {
         /* ordinary inventory display or pickup message */
-        Sprintf(li, "%c - %s%s", (use_invlet ? obj->invlet : let),
-                (txt ? txt : doname(obj)), (dot ? "." : ""));
+        if (use_invlet)
+            let = obj->invlet;
+        Strcpy(suffix, dot ? "." : "");
     }
+    sfxlen = (int) strlen(suffix);
+    if (txtlen > BUFSZ - 1 - (4 + sfxlen)) /* 4: "c - " prefix */
+        txtlen = BUFSZ - 1 - (4 + sfxlen);
+    Sprintf(li, fmt, let, txtlen, txt, suffix);
+
     if (savequan)
         obj->quan = savequan;
 
@@ -2636,12 +2660,18 @@ enum item_action_actions {
 
 /* construct text for the menu entries for IA_NAME_OBJ and IA_NAME_OTYP */
 static boolean
-item_naming_classification(struct obj *obj, char *onamebuf, char *ocallbuf)
+item_naming_classification(
+    struct obj *obj,
+    char *onamebuf,
+    char *ocallbuf)
 {
-    static const char Name[] = "Name", Rename[] = "Rename or un-name",
-                      /* "re-call" seems a bit weird, but "recall" and
-                         "rename" don't fit for changing a type name */
-                      Call[] = "Call", Recall[] = "Re-call or un-call";
+    static const char
+        Name[] = "Name",
+        Rename[] = "Rename or un-name",
+        Call[] = "Call",
+        /* "re-call" seems a bit weird, but "recall" and
+           "rename" don't fit for changing a type name */
+        Recall[] = "Re-call or un-call";
 
     onamebuf[0] = ocallbuf[0] = '\0';
     if (name_ok(obj) == GETOBJ_SUGGEST) {
@@ -2720,6 +2750,123 @@ ia_addmenu(winid win, int act, char let, const char *txt)
     any.a_int = act;
     add_menu(win, &nul_glyphinfo, &any, let, 0,
              ATR_NONE, clr, txt, MENU_ITEMFLAGS_NONE);
+}
+
+static void
+itemactions_pushkeys(struct obj *otmp, int act)
+{
+        switch (act) {
+        default:
+            impossible("Unknown item action");
+        case IA_NONE:
+            break;
+        case IA_UNWIELD:
+            cmdq_add_ec(CQ_CANNED, (otmp == uwep) ? dowield
+                        : (otmp == uswapwep) ? remarm_swapwep
+                          : (otmp == uquiver) ? dowieldquiver
+                            : donull); /* can't happen */
+            cmdq_add_key(CQ_CANNED, '-');
+            break;
+        case IA_APPLY_OBJ:
+            cmdq_add_ec(CQ_CANNED, doapply);
+            cmdq_add_key(CQ_CANNED, otmp->invlet);
+            break;
+        case IA_DIP_OBJ:
+            /* #altdip instead of normal #dip - takes potion to dip into
+               first (the inventory item instigating this) and item to
+               be dipped second, also ignores floor features such as
+               fountain/sink so we don't need to force m-prefix here */
+            cmdq_add_ec(CQ_CANNED, dip_into);
+            cmdq_add_key(CQ_CANNED, otmp->invlet);
+            break;
+        case IA_NAME_OBJ:
+        case IA_NAME_OTYP:
+            cmdq_add_ec(CQ_CANNED, docallcmd);
+            cmdq_add_key(CQ_CANNED, (act == IA_NAME_OBJ) ? 'i' : 'o');
+            cmdq_add_key(CQ_CANNED, otmp->invlet);
+            break;
+        case IA_DROP_OBJ:
+            cmdq_add_ec(CQ_CANNED, dodrop);
+            cmdq_add_key(CQ_CANNED, otmp->invlet);
+            break;
+        case IA_EAT_OBJ:
+            /* start with m-prefix; for #eat, it means ignore floor food
+               if present and eat food from invent */
+            cmdq_add_ec(CQ_CANNED, do_reqmenu);
+            cmdq_add_ec(CQ_CANNED, doeat);
+            cmdq_add_key(CQ_CANNED, otmp->invlet);
+            break;
+        case IA_ENGRAVE_OBJ:
+            cmdq_add_ec(CQ_CANNED, doengrave);
+            cmdq_add_key(CQ_CANNED, otmp->invlet);
+            break;
+        case IA_ADJUST_OBJ:
+            cmdq_add_ec(CQ_CANNED, doorganize); /* #adjust */
+            cmdq_add_key(CQ_CANNED, otmp->invlet);
+            break;
+        case IA_ADJUST_STACK:
+            cmdq_add_ec(CQ_CANNED, adjust_split); /* #altadjust */
+            cmdq_add_key(CQ_CANNED, otmp->invlet);
+            break;
+        case IA_SACRIFICE:
+            cmdq_add_ec(CQ_CANNED, dosacrifice);
+            cmdq_add_key(CQ_CANNED, otmp->invlet);
+            break;
+        case IA_BUY_OBJ:
+            cmdq_add_ec(CQ_CANNED, dopay);
+            cmdq_add_key(CQ_CANNED, otmp->invlet);
+            break;
+        case IA_QUAFF_OBJ:
+            /* start with m-prefix; for #quaff, it means ignore fountain
+               or sink if present and drink a potion from invent */
+            cmdq_add_ec(CQ_CANNED, do_reqmenu);
+            cmdq_add_ec(CQ_CANNED, dodrink);
+            cmdq_add_key(CQ_CANNED, otmp->invlet);
+            break;
+        case IA_QUIVER_OBJ:
+            cmdq_add_ec(CQ_CANNED, dowieldquiver);
+            cmdq_add_key(CQ_CANNED, otmp->invlet);
+            break;
+        case IA_READ_OBJ:
+            cmdq_add_ec(CQ_CANNED, doread);
+            cmdq_add_key(CQ_CANNED, otmp->invlet);
+            break;
+        case IA_RUB_OBJ:
+            cmdq_add_ec(CQ_CANNED, dorub);
+            cmdq_add_key(CQ_CANNED, otmp->invlet);
+            break;
+        case IA_THROW_OBJ:
+            cmdq_add_ec(CQ_CANNED, dothrow);
+            cmdq_add_key(CQ_CANNED, otmp->invlet);
+            break;
+        case IA_TAKEOFF_OBJ:
+            cmdq_add_ec(CQ_CANNED, dotakeoff);
+            cmdq_add_key(CQ_CANNED, otmp->invlet);
+            break;
+        case IA_TIP_CONTAINER:
+            cmdq_add_ec(CQ_CANNED, dotip);
+            cmdq_add_key(CQ_CANNED, otmp->invlet);
+            break;
+        case IA_INVOKE_OBJ:
+            cmdq_add_ec(CQ_CANNED, doinvoke);
+            cmdq_add_key(CQ_CANNED, otmp->invlet);
+            break;
+        case IA_WIELD_OBJ:
+            cmdq_add_ec(CQ_CANNED, dowield);
+            cmdq_add_key(CQ_CANNED, otmp->invlet);
+            break;
+        case IA_WEAR_OBJ:
+            cmdq_add_ec(CQ_CANNED, dowear);
+            cmdq_add_key(CQ_CANNED, otmp->invlet);
+            break;
+        case IA_SWAPWEAPON:
+            cmdq_add_ec(CQ_CANNED, doswapweapon);
+            break;
+        case IA_ZAP_OBJ:
+            cmdq_add_ec(CQ_CANNED, dozap);
+            cmdq_add_key(CQ_CANNED, otmp->invlet);
+            break;
+        }
 }
 
 /* Show menu of possible actions hero could do with item otmp */
@@ -3016,118 +3163,7 @@ itemactions(struct obj *otmp)
         act = selected[0].item.a_int;
         free((genericptr_t) selected);
 
-        switch (act) {
-        default:
-            impossible("Unknown item action");
-        case IA_NONE:
-            break;
-        case IA_UNWIELD:
-            cmdq_add_ec(CQ_CANNED, (otmp == uwep) ? dowield
-                        : (otmp == uswapwep) ? remarm_swapwep
-                          : (otmp == uquiver) ? dowieldquiver
-                            : donull); /* can't happen */
-            cmdq_add_key(CQ_CANNED, '-');
-            break;
-        case IA_APPLY_OBJ:
-            cmdq_add_ec(CQ_CANNED, doapply);
-            cmdq_add_key(CQ_CANNED, otmp->invlet);
-            break;
-        case IA_DIP_OBJ:
-            /* #altdip instead of normal #dip - takes potion to dip into
-               first (the inventory item instigating this) and item to
-               be dipped second, also ignores floor features such as
-               fountain/sink so we don't need to force m-prefix here */
-            cmdq_add_ec(CQ_CANNED, dip_into);
-            cmdq_add_key(CQ_CANNED, otmp->invlet);
-            break;
-        case IA_NAME_OBJ:
-        case IA_NAME_OTYP:
-            cmdq_add_ec(CQ_CANNED, docallcmd);
-            cmdq_add_key(CQ_CANNED, (act == IA_NAME_OBJ) ? 'i' : 'o');
-            cmdq_add_key(CQ_CANNED, otmp->invlet);
-            break;
-        case IA_DROP_OBJ:
-            cmdq_add_ec(CQ_CANNED, dodrop);
-            cmdq_add_key(CQ_CANNED, otmp->invlet);
-            break;
-        case IA_EAT_OBJ:
-            /* start with m-prefix; for #eat, it means ignore floor food
-               if present and eat food from invent */
-            cmdq_add_ec(CQ_CANNED, do_reqmenu);
-            cmdq_add_ec(CQ_CANNED, doeat);
-            cmdq_add_key(CQ_CANNED, otmp->invlet);
-            break;
-        case IA_ENGRAVE_OBJ:
-            cmdq_add_ec(CQ_CANNED, doengrave);
-            cmdq_add_key(CQ_CANNED, otmp->invlet);
-            break;
-        case IA_ADJUST_OBJ:
-            cmdq_add_ec(CQ_CANNED, doorganize); /* #adjust */
-            cmdq_add_key(CQ_CANNED, otmp->invlet);
-            break;
-        case IA_ADJUST_STACK:
-            cmdq_add_ec(CQ_CANNED, adjust_split); /* #altadjust */
-            cmdq_add_key(CQ_CANNED, otmp->invlet);
-            break;
-        case IA_SACRIFICE:
-            cmdq_add_ec(CQ_CANNED, dosacrifice);
-            cmdq_add_key(CQ_CANNED, otmp->invlet);
-            break;
-        case IA_BUY_OBJ:
-            cmdq_add_ec(CQ_CANNED, dopay);
-            cmdq_add_key(CQ_CANNED, otmp->invlet);
-            break;
-        case IA_QUAFF_OBJ:
-            /* start with m-prefix; for #quaff, it means ignore fountain
-               or sink if present and drink a potion from invent */
-            cmdq_add_ec(CQ_CANNED, do_reqmenu);
-            cmdq_add_ec(CQ_CANNED, dodrink);
-            cmdq_add_key(CQ_CANNED, otmp->invlet);
-            break;
-        case IA_QUIVER_OBJ:
-            cmdq_add_ec(CQ_CANNED, dowieldquiver);
-            cmdq_add_key(CQ_CANNED, otmp->invlet);
-            break;
-        case IA_READ_OBJ:
-            cmdq_add_ec(CQ_CANNED, doread);
-            cmdq_add_key(CQ_CANNED, otmp->invlet);
-            break;
-        case IA_RUB_OBJ:
-            cmdq_add_ec(CQ_CANNED, dorub);
-            cmdq_add_key(CQ_CANNED, otmp->invlet);
-            break;
-        case IA_THROW_OBJ:
-            cmdq_add_ec(CQ_CANNED, dothrow);
-            cmdq_add_key(CQ_CANNED, otmp->invlet);
-            break;
-        case IA_TAKEOFF_OBJ:
-            cmdq_add_ec(CQ_CANNED, dotakeoff);
-            cmdq_add_key(CQ_CANNED, otmp->invlet);
-            break;
-        case IA_TIP_CONTAINER:
-            cmdq_add_ec(CQ_CANNED, dotip);
-            cmdq_add_key(CQ_CANNED, otmp->invlet);
-            break;
-        case IA_INVOKE_OBJ:
-            cmdq_add_ec(CQ_CANNED, doinvoke);
-            cmdq_add_key(CQ_CANNED, otmp->invlet);
-            break;
-        case IA_WIELD_OBJ:
-            cmdq_add_ec(CQ_CANNED, dowield);
-            cmdq_add_key(CQ_CANNED, otmp->invlet);
-            break;
-        case IA_WEAR_OBJ:
-            cmdq_add_ec(CQ_CANNED, dowear);
-            cmdq_add_key(CQ_CANNED, otmp->invlet);
-            break;
-        case IA_SWAPWEAPON:
-            cmdq_add_ec(CQ_CANNED, doswapweapon);
-            break;
-        case IA_ZAP_OBJ:
-            cmdq_add_ec(CQ_CANNED, dozap);
-            cmdq_add_key(CQ_CANNED, otmp->invlet);
-            break;
-        }
+        itemactions_pushkeys(otmp, act);
     }
     destroy_nhwindow(win);
 
@@ -4747,7 +4783,7 @@ useupf(struct obj *obj, long numused)
         otmp = splitobj(obj, numused);
     else
         otmp = obj;
-    if (costly_spot(otmp->ox, otmp->oy)) {
+    if (!gc.context.mon_moving && costly_spot(otmp->ox, otmp->oy)) {
         if (strchr(u.urooms, *in_rooms(otmp->ox, otmp->oy, 0)))
             addtobill(otmp, FALSE, FALSE, FALSE);
         else

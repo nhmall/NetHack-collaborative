@@ -34,6 +34,7 @@ struct flag {
     boolean friday13;        /* it's Friday the 13th */
     boolean goldX;           /* for BUCX filtering, whether gold is X or U */
     boolean help;            /* look in data file for info about stuff */
+    boolean tips;            /* show helpful hints? */
     boolean ignintr;         /* ignore interrupts */
     boolean implicit_uncursed; /* maybe omit "uncursed" status in inventory */
     boolean ins_chkpt;       /* checkpoint as appropriate; INSURANCE */
@@ -265,6 +266,7 @@ struct instance_flags {
     boolean perm_invent;      /* keep full inventories up until dismissed */
     boolean renameallowed;    /* can change hero name during role selection */
     boolean renameinprogress; /* we are changing hero name */
+    boolean sounds;           /* master on/off switch for using soundlib */
     boolean status_updates;   /* allow updates to bottom status lines;
                                * disable to avoid excessive noise when using
                                * a screen reader (use ^X to review status) */
@@ -276,6 +278,7 @@ struct instance_flags {
     long hilite_delta;        /* number of moves to leave a temp hilite lit */
     long unhilite_deadline; /* time when oldest temp hilite should be unlit */
 #endif
+    boolean voices;           /* enable text-to-speech or other talking */
     boolean zerocomp;         /* write zero-compressed save files */
     boolean rlecomp;          /* alternative to zerocomp; run-length encoding
                                * compression of levels when writing savefile */
@@ -296,9 +299,6 @@ struct instance_flags {
     unsigned use_stone;  /* use the stone ppats */
 #endif
 #if defined(MSDOS) || defined(WIN32)
-    boolean hassound;     /* has a sound card */
-    boolean usesound;     /* use the sound card */
-    boolean usepcspeaker; /* use the pc speaker */
     boolean tile_view;
     boolean over_view;
     boolean traditional_view;

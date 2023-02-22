@@ -552,11 +552,13 @@ pick_lock(
         if (mtmp && canseemon(mtmp) && M_AP_TYPE(mtmp) != M_AP_FURNITURE
             && M_AP_TYPE(mtmp) != M_AP_OBJECT) {
             if (picktyp == CREDIT_CARD
-                && (mtmp->isshk || mtmp->data == &mons[PM_ORACLE]))
+                && (mtmp->isshk || mtmp->data == &mons[PM_ORACLE])) {
+                SetVoice(mtmp, 0, 80, 0);
                 verbalize("No checks, no credit, no problem.");
-            else
+            } else {
                 pline("I don't think %s would appreciate that.",
                       mon_nam(mtmp));
+            }
             return PICKLOCK_LEARNED_SOMETHING;
         } else if (mtmp && is_door_mappear(mtmp)) {
             /* "The door actually was a <mimic>!" */
@@ -818,7 +820,7 @@ doopen_indir(coordxy x, coordxy y)
         int oldglyph = door->glyph;
         schar oldlastseentyp = gl.lastseentyp[cc.x][cc.y];
 
-        feel_location(cc.x, cc.y);
+        newsym(cc.x, cc.y);
         if (door->glyph != oldglyph
             || gl.lastseentyp[cc.x][cc.y] != oldlastseentyp)
             res = ECMD_TIME; /* learned something */
@@ -1040,6 +1042,7 @@ boxlock(struct obj *obj, struct obj *otmp) /* obj *is* a box */
     case WAN_LOCKING:
     case SPE_WIZARD_LOCK:
         if (!obj->olocked) { /* lock it; fix if broken */
+            Soundeffect(se_klunk, 50);
             pline("Klunk!");
             obj->olocked = 1;
             obj->obroken = 0;
@@ -1053,6 +1056,7 @@ boxlock(struct obj *obj, struct obj *otmp) /* obj *is* a box */
     case WAN_OPENING:
     case SPE_KNOCK:
         if (obj->olocked) { /* unlock; couldn't be broken */
+            pline("Klick!");
             pline("Klick!");
             obj->olocked = 0;
             res = 1;
@@ -1115,11 +1119,13 @@ doorlock(struct obj *otmp, coordxy x, coordxy y)
             boolean vis = cansee(x, y);
 
             /* Can't have real locking in Rogue, so just hide doorway */
-            if (vis)
+            if (vis) {
                 pline("%s springs up in the older, more primitive doorway.",
                       dustcloud);
-            else
+            } else {
+                Soundeffect(se_swoosh, 25);
                 You_hear("a swoosh.");
+            }
             if (obstructed(x, y, mysterywand)) {
                 if (vis)
                     pline_The("cloud %s.", quickly_dissipates);
@@ -1193,12 +1199,15 @@ doorlock(struct obj *otmp, coordxy x, coordxy y)
                     /* for mtmp, mb_trapped() does is own wake_nearto() */
                     loudness = 40;
                     if (Verbose(1, doorlock1)) {
-                        if ((sawit || seeit) && !Unaware)
+                        Soundeffect(se_kaboom_door_explodes, 75);
+                        if ((sawit || seeit) && !Unaware) {
                             pline("KABOOM!!  You see a door explode.");
-                        else if (!Deaf)
+                        } else if (!Deaf) {
+                            Soundeffect(se_explosion, 75);
                             You_hear("a %s explosion.",
                                      (distu(x, y) > 7 * 7) ? "distant"
                                                            : "nearby");
+                        }
                     }
                 }
                 break;
@@ -1209,10 +1218,12 @@ doorlock(struct obj *otmp, coordxy x, coordxy y)
             seeit = cansee(x, y);
             newsym(x, y);
             if (Verbose(1, doorlock2)) {
-                if ((sawit || seeit) && !Unaware)
+                if ((sawit || seeit) && !Unaware) {
                     pline_The("door crashes open!");
-                else if (!Deaf)
+                } else if (!Deaf) {
+                    Soundeffect(se_crashing_sound, 100);
                     You_hear("a crashing sound.");
+                }
             }
             /* force vision recalc before printing more messages */
             if (gv.vision_full_recalc)

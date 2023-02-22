@@ -28,9 +28,6 @@
 /*#define DUMPLOG_FILE "nethack-%n-%d.log"*/
 #define DUMPLOG_MSG_COUNT 50
 
-#define USER_SOUNDS
-/* #define TTY_SOUND_ESCCODES */
-
 /*#define CHANGE_COLOR*/ /* allow palette changes */
 
 #define QWERTZ_SUPPORT  /* when swap_yz is True, numpad 7 is 'z' not 'y' */
@@ -95,6 +92,7 @@
 #define INTERJECTION_TYPES (INTERJECT_PANIC + 1)
 extern void interject_assistance(int, int, genericptr_t, genericptr_t);
 extern void interject(int);
+extern char *windows_exepath(void);
 
 /*
  *===============================================
@@ -103,9 +101,11 @@ extern void interject(int);
  */
 
 #ifdef __MINGW32__
+#if 0
 #define MD_USE_TMPFILE_S
 #if !defined(__cplusplus)
 extern errno_t tmpfile_s(FILE * restrict * restrict streamptr);
+#endif
 #endif
 #
 #ifdef strncasecmp
@@ -120,7 +120,7 @@ extern errno_t tmpfile_s(FILE * restrict * restrict streamptr);
 #define __USE_MINGW_ANSI_STDIO 1
 #endif
 /* extern int getlock(void); */
-#endif
+#endif   /* __MINGW32__ */
 
 #ifdef _MSC_VER
 #define MD_USE_TMPFILE_S

@@ -1,4 +1,4 @@
-HDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.1051 $ $NHDT-Date: 1665130022 2022/10/07 08:07:02 $
+HDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.1093 $ $NHDT-Date: 1672605786 2023/01/01 20:43:06 $
 
 General Fixes and Modified Features
 -----------------------------------
@@ -1084,6 +1084,37 @@ when identifying items via menu and more than one pass is needed (so when
 slightly more interesting Gehennom filler levels
 don't reveal color of potions, gems, or spellbooks that haven't been seen up
 	close (seeing faraway monster operate on an object counts as up close)
+fix freeing a worn object when forced to drop it by falling down stairs
+allow setting per-level "temperature": hot, cold, or temperate, currently
+	only affects some messages
+digging is noisy
+polymorphing into fire elemental allows you eat flammable items
+hitting sleeping monsters will cause them to wake up noisily
+demon gating happens more in Gehennom and less outside it
+intelligent peacefuls avoid digging shop or temple walls
+fix bug making random subrooms never touching the right or bottom
+	wall of the parent room
+if a grave is created with the corpse lying on top (bones), don't find a
+	corpse or release a zombie or mummy when digging it up
+kicking a headstone might summon a ghoul
+eating garlic makes nearby monsters flee
+giants occasionally get a battle axe or a two-handed sword
+give gremlin the property it stole, if possible
+'F'orcefighting with a war hammer has a small chance of breaking iron bars
+player assigned name for monsters, specific objects, or object types could be
+	longer than what was intented to be allowed; for 'curses', much longer
+very rarely random items are generated eroded, erodeproof, or greased
+Nazgul can see invisible
+fix a case where punished iron ball yanked hero on top of a monster
+slightly randomize amount of items and monsters in the mines
+dying in a wall spot (temporary gap or via Passes_walls) shared by two shops
+	could result in "place_object: \"<item>\" [0] off map <0,0>" warnings
+a monster capable of using a polymorph trap to deliberately change form could
+	do so when trapped in an adjacent web or pit; if that happened, the
+	monster remained flagged as 'trapped' and wouldn't be able to move
+give feedback when some types of damage are avoided due to MC (aka negation)
+feedback if a named, shape-shifted vampire reverted to original shape rather
+	than dying when engulfed could say "Dracula turns into Dracula"
 
 
 Fixes to 3.7.0-x Problems that Were Exposed Via git Repository
@@ -1457,6 +1488,13 @@ adding command line 'nethack --usage' broke 'nethack -u name' (however,
 being hit by a big monster and getting knockback effect could send hero out
 	of a shop (or into its "free spot") while carrying unpaid goods;
 	robbery wasn't noticed until hero eventually moved to a different spot
+hallucination of objects incorrectly included generic objects as candidates
+	for what objects looked like; if an object had its dknown flag set,
+	formatting a generic object in its place was unreliable (Null pointer
+	deference prior to static analyzer fix, odd fake name "generic" after)
+some actions that ask the user to pick a location allow typing '$' to show
+	valid spots, accept typing a second '$' prior to moving the cursor to
+	toggle the highlights off; ^R already did that; moving the cursor too
 
 curses: 'msg_window' option wasn't functional for curses unless the binary
 	also included tty support
@@ -1720,6 +1758,20 @@ X11: (possibly X11+macOS): try harder to resize the getlin() prompt, if needed,
 X11: set all selectable menu lines to the same length, left justified
 X11: initializing the get-extended-command widget modified memory beyond what
 	it dynamically allocated
+sound: add a soundlib interface that consists of a specification
+	documented in doc/sound.txt; default 'nosound' soundlib implementation
+	of the specification in src/sounds.c
+sound: added 'macsound' soundlib implementation for use on macOS; the
+	interface implementation resides in the objective C file
+	sound/macsound/macsound.m; built on top of the built-in AppKit
+	NSSound, #import <AppKit/AppKit.h>, linked using -framework AppKit.
+sound: added 'windsound' soundlib implementation for use on Windows; the
+	interface implementation resides in the file
+	sound/windsound/windsound.c; built on top of the win32 api,
+	header file mmsystem.h, linked with winmm.
+sound: add 'qtsound' soundlib implementation for use on any platform
+	with Qt; the interface implementation resides win/Qt/qt_bind.cpp;
+	built on top of Qt.
 
 
 General New Features
@@ -1922,8 +1974,13 @@ for ranger characters, shooting any type of arrow while wielding the Longbow
 change the #vanquished command from debug-only to general user command
 add 'sortvanquished' option to be able to set the preferred sort order without
 	using 'm #vanquished' and to have it persist across save/restore
+add #genocided command
 have 'I u' mention whether there are any unpaid items on the floor (unusual
 	but not impossible); it doesn't itemize them or show shop price
+add items given a Japanese name when playing as a Samurai to discoveries list
+make music improvisations more varied and interesting, as well as useful
+give a helpful tip when first entering "farlook" mode
+add a boolean option tips to disable all of the helpful tips
 
 
 Platform- and/or Interface-Specific New Features

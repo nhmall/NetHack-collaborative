@@ -37,7 +37,7 @@
 .ds f0 "\*(vr
 .ds f1
 .\"DO NOT REMOVE NH_DATESUB .ds f2 "DATE(%B %-d, %Y)
-.ds f2 "December 28, 2022
+.ds f2 "February 19, 2023
 .
 .\" A note on some special characters:
 .\" \(lq = left double quote
@@ -1232,6 +1232,8 @@ Default key is \(oqZ\(cq.
 .lp "#chat    "
 Talk to someone.
 Default key is \(oqM-c\(cq.
+.lp "#chronicle"
+Show a list of important game events.
 .lp "#close   "
 Close a door.
 Default key is \(oqc\(cq.
@@ -1296,6 +1298,10 @@ Default key is \(oqf\(cq.
 Force a lock.
 Autocompletes.
 Default key is \(oqM-f\(cq.
+.lp #genocided
+List any monster types which have been genocided or become extinct.
+Autocompletes.
+Default key is \(oqM-g\(cq.
 .lp "#glance  "
 Show what type of thing a map symbol corresponds to.
 Default key is \(oq;\(cq.
@@ -1532,6 +1538,10 @@ otherwise \(oq5\(cq when it is set to 2 or 4.
 .lp "#save    "
 Save the game and exit the program.
 Default key is \(oqS\(cq.
+.lp "#saveoptions"
+Save configuration options to the config file.
+This will overwrite the file, removing all comments, so if you have
+manually edited the config file, don't use this.
 .lp "#search  "
 Search for traps and secret doors around you.
 Default key is \(oqs\(cq.
@@ -1861,6 +1871,8 @@ option is enabled)
 #enhance
 .lp M-f
 #force
+.lp M-g
+#genocided
 .lp M-i
 #invoke
 .lp M-j
@@ -3414,12 +3426,12 @@ The file may not exist, but it is a normal ASCII text file and
 can be created with any text editor.
 .pg
 On Windows, it is \(lq.nethackrc\(rq in the folder
-\(lq\\%USERPROFILE%\\NetHack\\3.7\(rq.  The file may not exist,
+\(lq\\%USERPROFILE%\\NetHack\\(rq.  The file may not exist,
 but it is a normal ASCII text file can can be created with any
 text editor.
 After running NetHack for the first time, you should find a default
 template for the configuration file named \(lq.nethackrc.template\(rq
-in \(lq\\%USERPROFILE%\\NetHack\\3.7\(rq.
+in \(lq\\%USERPROFILE%\\NetHack\\(rq.
 If you had not created the configuration file, NetHack will create
 the configuration file for you using the default template file.
 .pg
@@ -4483,6 +4495,8 @@ order by count, low to high; ties broken by internal index.
 .PE
 Can be interactively set via the \(oq\f(CRm O\fP\(cq command or via using
 the \(oq\f(CRm\fP\(cq prefix before the #vanquished command.
+.lp "sounds "
+Allow sounds to be emitted from an integrated sound library (default on).
 .lp "sparkle "
 Display a sparkly effect when a monster (including yourself) is hit by an
 attack to which it is resistant (default on).
@@ -4514,6 +4528,9 @@ screen.
 (Applies to \(lqtty\(rq and \(lqcurses\(rq interfaces only; \(lqX11\(rq interface always
 uses a timer-based delay.
 The default is on if configured into the program.)
+Persistent.
+.lp "tips    "
+Show some helpful tips during gameplay (default on).
 Persistent.
 .lp tombstone
 Draw a tombstone graphic upon your death (default on).
@@ -5558,6 +5575,7 @@ k	S_kobold	(kobold)
 K	S_kop	(Keystone Kop)
 \(ha	S_land_mine	(land mine)
 }	S_lava	(molten lava)
+}	S_lavawall	(wall of lava)
 l	S_leprechaun	(leprechaun)
 \(ha	S_level_teleporter	(level teleporter)
 L	S_lich	(lich)
@@ -6311,6 +6329,9 @@ NetHack 3.6.5 was released on January 27, 2020 containing some security fixes
 and a small number of bug fixes.
 .pg
 NetHack 3.6.6 was released on March 8, 2020 containing a security fix and
+some bug fixes.
+.pg
+NetHack 3.6.7 was released on February 16, 2023 containing a security fix and
 some bug fixes.
 .pg
 The official NetHack web site is maintained by \fBKen Lorber\fP

@@ -57,24 +57,25 @@ enum levl_typ_types {
     WATER     = 18,
     DRAWBRIDGE_UP = 19,
     LAVAPOOL  = 20,
-    IRONBARS  = 21, /* KMH */
-    DOOR      = 22,
-    CORR      = 23,
-    ROOM      = 24,
-    STAIRS    = 25,
-    LADDER    = 26,
-    FOUNTAIN  = 27,
-    THRONE    = 28,
-    SINK      = 29,
-    GRAVE     = 30,
-    ALTAR     = 31,
-    ICE       = 32,
-    DRAWBRIDGE_DOWN = 33,
-    AIR       = 34,
-    CLOUD     = 35,
+    LAVAWALL  = 21,
+    IRONBARS  = 22, /* KMH */
+    DOOR      = 23,
+    CORR      = 24,
+    ROOM      = 25,
+    STAIRS    = 26,
+    LADDER    = 27,
+    FOUNTAIN  = 28,
+    THRONE    = 29,
+    SINK      = 30,
+    GRAVE     = 31,
+    ALTAR     = 32,
+    ICE       = 33,
+    DRAWBRIDGE_DOWN = 34,
+    AIR       = 35,
+    CLOUD     = 36,
 
-    MAX_TYPE  = 36,
-    MATCH_WALL = 37,
+    MAX_TYPE  = 37,
+    MATCH_WALL = 38,
     INVALID_TYPE = 127
 };
 
@@ -328,10 +329,12 @@ struct rm {
 #define drawbridgemask flags /* what's underneath when the span is open */
 #define looted     flags /* used for throne, tree, fountain, sink, door */
 #define icedpool   flags /* used for ice (in case it melts) */
+#define emptygrave flags /* no corpse in grave */
 /* horizonal applies to walls, doors (including sdoor); also to iron bars
    even though they don't have separate symbols for horizontal and vertical */
 #define blessedftn horizontal /* a fountain that grants attribs */
-#define disturbed  horizontal /* a grave that has been disturbed */
+#define disturbed  horizontal /* kicking or engraving on a grave's headstone
+                               * has summoned a ghoul */
 
 struct damage {
     struct damage *next;
@@ -386,6 +389,7 @@ struct levelflags {
                                   normal mode descendant of such) */
     Bitfield(corrmaze, 1);     /* Whether corridors are used for the maze
                                   rather than ROOM */
+    schar temperature;         /* +1 == hot, -1 == cold */
 };
 
 typedef struct {

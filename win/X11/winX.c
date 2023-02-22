@@ -16,6 +16,14 @@
 #define SHORT_FILENAMES
 #endif
 
+/* Can't use #ifdef LINUX because no header files have been processed yet.
+ * This is needed to ensure the prototype for seteuid() is picked up when
+ * the header files are processed.
+ */
+#ifdef __linux__
+#define _POSIX_C_SOURCE 200809
+#endif
+
 #include <X11/Intrinsic.h>
 #include <X11/StringDefs.h>
 #include <X11/Shell.h>
@@ -46,7 +54,10 @@
 #undef SHORT_FILENAMES /* hack.h will reset via global.h if necessary */
 #endif
 
+#define X11_BUILD
 #include "hack.h"
+#undef X11_BUILD
+
 #include "winX.h"
 #include "dlb.h"
 #include "xwindow.h"
@@ -1512,8 +1523,11 @@ X11_error_handler(String str)
 {
     nhUse(str);
     hangup(1);
-    nh_terminate(EXIT_FAILURE);
+#ifdef SAFERHANGUP /* keeps going after hangup() for '#if SAFERHANGUP' */
+    end_of_input();
+#endif
     /*NOTREACHED*/
+    nh_terminate(EXIT_FAILURE);
 }
 
 static int
@@ -1521,6 +1535,10 @@ X11_io_error_handler(Display *display)
 {
     nhUse(display);
     hangup(1);
+#ifdef SAFERHANGUP /* keeps going after hangup() for '#if SAFERHANGUP' */
+    end_of_input();
+#endif
+    /*NOREACHED*/ /* but not declared NORETURN */
     return 0;
 }
 

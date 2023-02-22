@@ -57,6 +57,7 @@ end
 function hell_tweaks(protected_area)
    local liquid = "L";
    local ground = ".";
+   local n_prot = protected_area:numpoints();
    local prot = protected_area:negate();
 
    -- random pools
@@ -82,28 +83,94 @@ function hell_tweaks(protected_area)
 
    -- river
    if (percent(50)) then
-      local floor = selection.match(ground);
-      local a = selection.rndcoord(floor);
-      local b = selection.rndcoord(floor);
-      local lavariver = selection.randline(selection.new(), a.x, a.y, b.x, b.y, 10);
+      local allrivers = selection.new();
+      local reqpts = ((nhc.COLNO * nhc.ROWNO) - n_prot) / 12; -- # of lava pools required
+      local rpts = 0;
+      local rivertries = 0;
 
-      if (percent(50)) then
-         lavariver = selection.grow(lavariver, "north");
-      end
-      if (percent(50)) then
-         lavariver = selection.grow(lavariver, "west");
-      end
-      if (percent(25)) then
-         local riverbanks = selection.grow(lavariver);
+      repeat
+            local floor = selection.match(ground);
+            local a = selection.rndcoord(floor);
+            local b = selection.rndcoord(floor);
+            local lavariver = selection.randline(selection.new(), a.x, a.y, b.x, b.y, 10);
+
+            if (percent(50)) then
+               lavariver = selection.grow(lavariver, "north");
+            end
+            if (percent(50)) then
+               lavariver = selection.grow(lavariver, "west");
+            end
+            allrivers = allrivers | lavariver;
+            allrivers = allrivers & prot;
+
+            rpts = allrivers:numpoints();
+            rivertries = rivertries + 1;
+      until ((rpts > reqpts) or (rivertries > 7));
+
+      if (percent(60)) then
+         local prc = 10 * math.random(1, 6);
+         local riverbanks = selection.grow(allrivers);
          riverbanks = riverbanks & prot;
-         des.terrain(selection.percentage(riverbanks, 50), ground);
+         des.terrain(selection.percentage(riverbanks, prc), ground);
       end
-      lavariver = lavariver & prot;
-      des.terrain(lavariver, liquid);
+
+      des.terrain(allrivers, liquid);
    end
+
+   -- replacing some walls with boulders
+   if (percent(20)) then
+      local amount = 3 * math.random(1, 8);
+      local bwalls = selection.match([[.w.]]):percentage(amount) | selection.match(".\nw\n."):percentage(amount);
+      bwalls = bwalls & prot;
+      bwalls:iterate(function (x,y)
+            des.terrain(x, y, ".");
+            des.object("boulder", x, y);
+      end);
+   end
+
+   -- replacing some walls with iron bars
+   if (percent(20)) then
+      local amount = 3 * math.random(1, 8);
+      local fwalls = selection.match([[.w.]]):percentage(amount) | selection.match(".\nw\n."):percentage(amount);
+      fwalls = fwalls:grow() & selection.match("w") & prot;
+      des.terrain(fwalls, "F");
+   end
+
 end
 
 -- pline with variable number of arguments
 function pline(fmt, ...)
    nh.pline(string.format(fmt, table.unpack({...})));
+end
+
+-- wrapper to make calling from nethack core easier
+function nh_set_variables_string(key, tbl)
+   return "nh_lua_variables[\"" .. key .. "\"]=" .. table_stringify(tbl) .. ";";
+end
+
+-- wrapper to make calling from nethack core easier
+function nh_get_variables_string(tbl)
+   return "return " .. table_stringify(tbl) .. ";";
+end
+
+-- return the (simple) table tbl converted into a string
+function table_stringify(tbl)
+   local str = "";
+   for key, value in pairs(tbl) do
+      local typ = type(value);
+      if (typ == "table") then
+         str = str .. "[\"" .. key .. "\"]=" .. table_stringify(value);
+      elseif (typ == "string") then
+         str = str .. "[\"" .. key .. "\"]=[[" .. value .. "]]";
+      elseif (typ == "boolean") then
+         str = str .. "[\"" .. key .. "\"]=" .. tostring(value);
+      elseif (typ == "number") then
+         str = str .. "[\"" .. key .. "\"]=" .. value;
+      elseif (typ == "nil") then
+         str = str .. "[\"" .. key .. "\"]=nil";
+      end
+      str = str .. ",";
+   end
+   -- pline("table_stringify:(%s)", str);
+   return "{" .. str .. "}";
 end

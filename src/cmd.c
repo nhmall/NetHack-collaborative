@@ -43,7 +43,7 @@ extern int dofire(void);             /**/
 extern int dothrow(void);            /**/
 extern int doeat(void);              /**/
 extern int done2(void);              /**/
-extern int vanquished(void);         /**/
+extern int dovanquished(void);       /**/
 extern int doengrave(void);          /**/
 extern int dopickup(void);           /**/
 extern int ddoinv(void);             /**/
@@ -2567,6 +2567,9 @@ struct ext_func_tab extcmdlist[] = {
               doforce, AUTOCOMPLETE, NULL },
     { ';',    "glance", "show what type of thing a map symbol corresponds to",
               doquickwhatis, IFBURIED | GENERALCMD, NULL },
+    { M('g'), "genocided",
+              "list monsters that have been genocided or become extinct",
+              dogenocided, IFBURIED | AUTOCOMPLETE, NULL },
     { '?',    "help", "give a help message",
               dohelp, IFBURIED | GENERALCMD, NULL },
     { '\0',   "herecmdmenu", "show menu of commands you can do here",
@@ -4056,14 +4059,14 @@ RESTORE_WARNING_FORMAT_NONLITERAL
 static int
 wiz_display_macros(void)
 {
+    static const char display_issues[] = "Display macro issues:";
     char buf[BUFSZ];
     winid win;
-    int test, trouble = 0, no_glyph = NO_GLYPH, max_glyph = MAX_GLYPH;
-    static const char *const display_issues = "Display macro issues:";
+    int glyph, test, trouble = 0, no_glyph = NO_GLYPH, max_glyph = MAX_GLYPH;
 
     win = create_nhwindow(NHW_TEXT);
 
-    for (int glyph = 0; glyph < MAX_GLYPH; ++glyph) {
+    for (glyph = 0; glyph < MAX_GLYPH; ++glyph) {
         /* glyph_is_cmap / glyph_to_cmap() */
         if (glyph_is_cmap(glyph)) {
             test = glyph_to_cmap(glyph);
@@ -4177,6 +4180,8 @@ wiz_mon_diff(void)
 static void
 you_sanity_check(void)
 {
+    struct monst *mtmp;
+
     if (u.uswallow && !u.ustuck) {
         /* this probably ought to be panic() */
         impossible("sanity_check: swallowed by nothing?");
@@ -4186,6 +4191,12 @@ you_sanity_check(void)
         u.uswldtim = 0;
         docrt();
     }
+    if ((mtmp = m_at(u.ux, u.uy)) != 0) {
+        /* u.usteed isn't on the map */
+        if (u.ustuck != mtmp)
+            impossible("sanity_check: you over monster");
+    }
+
     (void) check_invent_gold("invent");
 }
 
@@ -4600,7 +4611,8 @@ reset_commands(boolean initial)
 #endif
             /* FIXME: NHKF_DOINV2 ought to be implemented instead of this */
             c = M('0') & 0xff;
-            gc.Cmd.commands[c] = gc.Cmd.pcHack_compat ? gc.Cmd.commands['I'] : 0;
+            gc.Cmd.commands[c] = gc.Cmd.pcHack_compat ? gc.Cmd.commands['I']
+                                                      : 0;
         }
         /* phone keypad layout (only applicable for num_pad) */
         flagtemp = (iflags.num_pad_mode & 2) ? gc.Cmd.num_pad : FALSE;
@@ -6014,7 +6026,7 @@ there_cmd_menu(coordxy x, coordxy y, int mod)
 
     if (!K) {
         /* no menu options, try to move */
-        if (next2u(x, y) && !test_move(u.ux, u.uy, dx, dy, TEST_MOVE)) {
+        if (next2u(x, y) && test_move(u.ux, u.uy, dx, dy, TEST_MOVE)) {
             int dir = xytod(dx, dy);
 
             cmdq_add_ec(CQ_CANNED, move_funcs[dir][MV_WALK]);
@@ -6308,7 +6320,8 @@ hangup(
        must continue running longer before attempting a hangup save. */
     gp.program_state.done_hup++;
     /* defer hangup iff game appears to be in progress */
-    if (gp.program_state.in_moveloop && gp.program_state.something_worth_saving)
+    if (gp.program_state.in_moveloop
+        && gp.program_state.something_worth_saving)
         return;
 #endif /* SAFERHANGUP */
     end_of_input();
@@ -6330,6 +6343,8 @@ end_of_input(void)
 #endif
         if (gp.program_state.something_worth_saving)
             (void) dosave0();
+    if (soundprocs.sound_exit_nhsound)
+        (*soundprocs.sound_exit_nhsound)("end_of_input");
     if (iflags.window_inited)
         exit_nhwindows((char *) 0);
     clearlocks();
@@ -6546,6 +6561,12 @@ yn_function(
         else
             cmdq_clear(CQ_CANNED); /* 'res' is ESC */
     } else {
+#ifdef SND_SPEECH
+        if ((gp.pline_flags & PLINE_SPEECH) != 0) {
+            sound_speak(query);
+            gp.pline_flags &= ~PLINE_SPEECH;
+        }
+#endif
         res = (*windowprocs.win_yn_function)(query, resp, def);
         if (addcmdq)
             cmdq_add_key(CQ_REPEAT, res);
