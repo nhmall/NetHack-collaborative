@@ -52,7 +52,6 @@ static boolean m_slips_free(struct monst *, struct attack *);
 static void start_engulf(struct monst *);
 static void end_engulf(void);
 static int gulpum(struct monst *, struct attack *);
-static boolean m_is_steadfast(struct monst *);
 static boolean hmonas(struct monst *);
 static void nohandglow(struct monst *);
 static boolean mhurtle_to_doom(struct monst *, int, struct permonst **);
@@ -3478,8 +3477,10 @@ mhitm_ad_pest(struct monst *magr, struct attack *mattk,
 }
 
 void
-mhitm_ad_deth(struct monst *magr, struct attack *mattk UNUSED,
-              struct monst *mdef, struct mhitm_data *mhm)
+mhitm_ad_deth(
+    struct monst *magr,
+    struct attack *mattk UNUSED,
+    struct monst *mdef, struct mhitm_data *mhm)
 {
     struct permonst *pd = mdef->data;
 
@@ -3502,7 +3503,7 @@ mhitm_ad_deth(struct monst *magr, struct attack *mattk UNUSED,
         case 18:
         case 17:
             if (!Antimagic) {
-                touch_of_death();
+                touch_of_death(magr);
                 mhm->damage = 0;
                 return;
             }
@@ -4803,7 +4804,7 @@ missum(
 }
 
 /* check whether equipment protects against knockback */
-static boolean
+boolean
 m_is_steadfast(struct monst *mtmp)
 {
     boolean is_u = (mtmp == &gy.youmonst);

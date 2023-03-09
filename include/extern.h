@@ -245,6 +245,7 @@ extern int domonability(void);
 extern const struct ext_func_tab *ext_func_tab_from_func(int(*)(void));
 extern char cmd_from_func(int(*)(void));
 extern char cmd_from_dir(int, int);
+extern char *cmd_from_ecname(const char *);
 extern const char *cmdname_from_func(int(*)(void), char *, boolean);
 extern boolean redraw_cmd(char);
 extern const char *levltyp_to_name(int);
@@ -331,6 +332,7 @@ extern void destroy_drawbridge(coordxy, coordxy);
 /* ### decl.c ### */
 
 extern void decl_globals_init(void);
+extern void sa_victual(volatile struct victual_info *);
 
 /* ### detect.c ### */
 
@@ -831,6 +833,9 @@ extern void del_engr(struct engr *);
 extern void rloc_engr(struct engr *);
 extern void make_grave(coordxy, coordxy, const char *);
 extern void disturb_grave(coordxy, coordxy);
+extern void map_engraving(struct engr *, int);
+extern void see_engraving(struct engr *);
+extern void feel_engraving(struct engr *);
 
 /* ### exper.c ### */
 
@@ -986,6 +991,7 @@ extern int monster_nearby(void);
 extern void end_running(boolean);
 extern void nomul(int);
 extern void unmul(const char *);
+extern int saving_grace(int);
 extern void losehp(int, const char *, schar);
 extern int weight_cap(void);
 extern int inv_weight(void);
@@ -1315,7 +1321,8 @@ extern boolean usmellmon(struct permonst *);
 /* ### mcastu.c ### */
 
 extern int castmu(struct monst *, struct attack *, boolean, boolean);
-extern void touch_of_death(void);
+extern void touch_of_death(struct monst *);
+extern char *death_inflicted_by(char *, const char *, struct monst *);
 extern int buzzmu(struct monst *, struct attack *);
 
 /* ### mdlib.c ### */
@@ -2008,6 +2015,7 @@ extern int shiny_obj(char);
 
 /* ### options.c ### */
 
+extern boolean ask_do_tutorial(void);
 extern boolean match_optname(const char *, const char *, int, boolean);
 extern uchar txt2key(char *);
 extern void initoptions(void);
@@ -2341,6 +2349,7 @@ extern void punish(struct obj *);
 extern void unpunish(void);
 extern boolean cant_revive(int *, boolean, struct obj *);
 extern boolean create_particular(void);
+extern boolean avoid_ceiling(d_level *);
 
 /* ### rect.c ### */
 
@@ -2601,6 +2610,7 @@ extern void yelp(struct monst *);
 extern void whimper(struct monst *);
 extern void beg(struct monst *);
 extern const char *maybe_gasp(struct monst *);
+extern const char *cry_sound(struct monst *);
 extern int dotalk(void);
 extern int tiphat(void);
 #ifdef USER_SOUNDS
@@ -3027,6 +3037,7 @@ extern void do_stone_mon(struct monst *, struct attack *, struct monst *,
 extern int damageum(struct monst *, struct attack *, int);
 extern int explum(struct monst *, struct attack *);
 extern void missum(struct monst *, struct attack *, boolean);
+extern boolean m_is_steadfast(struct monst *);
 extern boolean mhitm_knockback(struct monst *, struct monst *,struct attack *,
                                int *, boolean);
 extern int passive(struct monst *, struct obj *, boolean, boolean, uchar,

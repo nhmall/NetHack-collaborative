@@ -241,6 +241,8 @@ mreadmsg(struct monst *mtmp, struct obj *otmp)
         /* directly see the monster reading the scroll */
         pline("%s reads %s!", Monnam(mtmp), onambuf);
     } else {
+        char blindbuf[BUFSZ];
+
         boolean m_is_like_u = (!Hallucination
                                && same_race(gy.youmonst.data, mtmp->data));
         /* describe the unseen monster accurately if it is similar to the
@@ -254,9 +256,11 @@ mreadmsg(struct monst *mtmp, struct obj *otmp)
         if (couldsee(mtmp->mx, mtmp->my) && mdistu(mtmp) <= 10 * 10)
             map_invisible(mtmp->mx, mtmp->my);
 
-        You_hear("%s reading %s.",
+        Snprintf(blindbuf, sizeof blindbuf, "reading %s.", onambuf);
+        strsubst(blindbuf, "reading a scroll labeled", "incant");
+        You_hear("%s %s.",
                  x_monnam(mtmp, ARTICLE_A, (char *) 0, mflags, FALSE),
-                 onambuf);
+                 blindbuf);
     }
     if (mtmp->mconf)
         pline("Being confused, %s mispronounces the magic words...",
@@ -1659,19 +1663,27 @@ use_offensive(struct monst *mtmp)
         if (oseen)
             makeknown(otmp->otyp);
         gm.m_using = TRUE;
+        gc.current_wand = otmp;
+        gb.buzzer = mtmp;
         buzz(BZ_M_WAND(BZ_OFS_WAN(otmp->otyp)),
              (otmp->otyp == WAN_MAGIC_MISSILE) ? 2 : 6, mtmp->mx, mtmp->my,
              sgn(mtmp->mux - mtmp->mx), sgn(mtmp->muy - mtmp->my));
+        gb.buzzer = 0;
+        gc.current_wand = 0;
         gm.m_using = FALSE;
         return (DEADMONSTER(mtmp)) ? 1 : 2;
     case MUSE_FIRE_HORN:
     case MUSE_FROST_HORN:
         mplayhorn(mtmp, otmp, FALSE);
         gm.m_using = TRUE;
+        gb.buzzer = mtmp;
+        gc.current_wand = otmp; /* needed by zhitu() */
         buzz(BZ_M_WAND(BZ_OFS_AD((otmp->otyp == FROST_HORN) ? AD_COLD
                                                             : AD_FIRE)),
              rn1(6, 6), mtmp->mx, mtmp->my, sgn(mtmp->mux - mtmp->mx),
              sgn(mtmp->muy - mtmp->my));
+        gb.buzzer = 0;
+        gc.current_wand = 0;
         gm.m_using = FALSE;
         return (DEADMONSTER(mtmp)) ? 1 : 2;
     case MUSE_WAN_TELEPORTATION:

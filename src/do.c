@@ -16,9 +16,11 @@ static boolean engulfer_digests_food(struct obj *);
 static boolean danger_uprops(void);
 static int wipeoff(void);
 static int menu_drop(int);
+static boolean u_stuck_cannot_go(const char *);
 static NHFILE *currentlevel_rewrite(void);
 static void familiar_level_msg(void);
 static void final_level(void);
+static void temperature_change_msg(schar);
 
 /* static boolean badspot(coordxy,coordxy); */
 
@@ -1019,6 +1021,26 @@ menu_drop(int retry)
     return (n_dropped ? ECMD_TIME : ECMD_OK);
 }
 
+static boolean
+u_stuck_cannot_go(const char *updn)
+{
+    if (u.ustuck) {
+        if (u.uswallow || !sticks(gy.youmonst.data)) {
+            You("are %s, and cannot go %s.",
+                !u.uswallow ? "being held"
+                : digests(u.ustuck->data) ? "swallowed"
+                : "engulfed", updn);
+            return TRUE;
+        } else {
+            struct monst *mtmp = u.ustuck;
+
+            set_ustuck((struct monst *) 0);
+            You("release %s.", mon_nam(mtmp));
+        }
+    }
+    return FALSE;
+}
+
 /* the #down command */
 int
 dodown(void)
@@ -1103,20 +1125,8 @@ dodown(void)
         return ECMD_TIME; /* came out of hiding; need '>' again to go down */
     }
 
-    if (u.ustuck) {
-        if (u.uswallow || !sticks(gy.youmonst.data)) {
-            You("are %s, and cannot go down.",
-                !u.uswallow ? "being held"
-                : digests(u.ustuck->data) ? "swallowed"
-                  : "engulfed");
-            return ECMD_TIME;
-        } else {
-            struct monst *mtmp = u.ustuck;
-
-            set_ustuck((struct monst *) 0);
-            You("release %s.", mon_nam(mtmp));
-        }
-    }
+    if (u_stuck_cannot_go("down"))
+        return ECMD_TIME;
 
     if (!stairs_down && !ladder_down) {
         trap = t_at(u.ux, u.uy);
@@ -1213,20 +1223,10 @@ doup(void)
     if (stucksteed(TRUE)) {
         return ECMD_OK;
     }
-    if (u.ustuck) {
-        if (u.uswallow || !sticks(gy.youmonst.data)) {
-            You("are %s, and cannot go up.",
-                !u.uswallow ? "being held"
-                : digests(u.ustuck->data) ? "swallowed"
-                  : "engulfed");
-            return ECMD_TIME;
-        } else {
-            struct monst *mtmp = u.ustuck;
 
-            set_ustuck((struct monst *) 0);
-            You("release %s.", mon_nam(mtmp));
-        }
-    }
+    if (u_stuck_cannot_go("up"))
+        return ECMD_TIME;
+
     if (near_capacity() > SLT_ENCUMBER) {
         /* No levitation check; inv_weight() already allows for it */
         Your("load is too heavy to climb the %s.",
@@ -1481,6 +1481,12 @@ goto_level(
     if (on_level(newlevel, &u.uz))
         return; /* this can happen */
 
+    if (gl.luacore && nhcb_counts[NHCB_LVL_LEAVE]) {
+        lua_getglobal(gl.luacore, "nh_callback_run");
+        lua_pushstring(gl.luacore, nhcb_name[NHCB_LVL_LEAVE]);
+        nhl_pcall(gl.luacore, 1, 0);
+    }
+
     /* tethered movement makes level change while trapped feasible */
     if (u.utrap && u.utraptype == TT_BURIEDBALL)
         buried_ball_to_punishment(); /* (before we save/leave old level) */
@@ -1511,7 +1517,8 @@ goto_level(
     set_ustuck((struct monst *) 0); /* clear u.ustuck and u.uswallow */
     set_uinwater(0); /* u.uinwater = 0 */
     u.uundetected = 0; /* not hidden, even if means are available */
-    keepdogs(FALSE);
+    if (!u.nofollowers)
+        keepdogs(FALSE);
     recalc_mapseen(); /* recalculate map overview before we leave the level */
     /*
      *  We no longer see anything on the level.  Make sure that this
@@ -1611,6 +1618,7 @@ goto_level(
     if (portal && !In_endgame(&u.uz)) {
         /* find the portal on the new level */
         register struct trap *ttrap;
+        struct stairway *stway;
 
         for (ttrap = gf.ftrap; ttrap; ttrap = ttrap->ntrap)
             if (ttrap->ttyp == MAGIC_PORTAL)
@@ -1623,6 +1631,9 @@ goto_level(
                    after already getting expelled once. The portal back
                    doesn't exist anymore - see expulsion(). */
                 u_on_rndspot(0);
+            } else if ((stway = stairway_find_dir(TRUE)) != 0) {
+                /* returning from tutorial via portal */
+                u_on_newpos(stway->sx, stway->sy);
             } else {
                 panic("goto_level: no corresponding portal!");
             }
@@ -1820,16 +1831,7 @@ goto_level(
         }
     }
 
-    if (prev_temperature != gl.level.flags.temperature) {
-        if (gl.level.flags.temperature)
-            hellish_smoke_mesg();
-        else if (prev_temperature > 0)
-            pline_The("heat %s gone.",
-                      In_hell(&u.uz0)
-                      ? "and smoke are" : "is");
-        else if (prev_temperature < 0)
-            You("are out of the cold.");
-    }
+    temperature_change_msg(prev_temperature);
 
     /* this was originally done earlier; moved here to be logged after
        any achievement related to entering a dungeon branch
@@ -1891,6 +1893,22 @@ hellish_smoke_mesg(void)
     if (In_hell(&u.uz) && gl.level.flags.temperature > 0)
         pline("You %s smoke...",
               olfaction(gy.youmonst.data) ? "smell" : "sense");
+}
+
+/* give a message when the level temperature is different from previous */
+static void
+temperature_change_msg(schar prev_temperature)
+{
+    if (prev_temperature != gl.level.flags.temperature) {
+        if (gl.level.flags.temperature)
+            hellish_smoke_mesg();
+        else if (prev_temperature > 0)
+            pline_The("heat %s gone.",
+                      In_hell(&u.uz0)
+                      ? "and smoke are" : "is");
+        else if (prev_temperature < 0)
+            You("are out of the cold.");
+    }
 }
 
 /* usually called from goto_level(); might be called from Sting_effects() */

@@ -1016,6 +1016,12 @@ makelevel(void)
     for (i = 0; i < gn.nroom; ++i) {
         fill_special_room(&gr.rooms[i]);
     }
+
+    if (gl.luacore && nhcb_counts[NHCB_LVL_ENTER]) {
+        lua_getglobal(gl.luacore, "nh_callback_run");
+        lua_pushstring(gl.luacore, nhcb_name[NHCB_LVL_ENTER]);
+        nhl_pcall(gl.luacore, 1, 0);
+    }
 }
 
 /*
@@ -1518,6 +1524,9 @@ mktrap(
         (void) makemon(&mons[PM_GIANT_SPIDER], m.x, m.y, NO_MM_FLAGS);
     if (t && (mktrapflags & MKTRAP_SEEN))
         t->tseen = TRUE;
+    if (kind == MAGIC_PORTAL && (u.ucamefrom.dnum || u.ucamefrom.dlevel)) {
+        assign_level(&t->dst, &u.ucamefrom);
+    }
 
     /* The hero isn't the only person who's entered the dungeon in
        search of treasure. On the very shallowest levels, there's a
@@ -1540,7 +1549,8 @@ mktrap(
        lethal, and tend not to generate on shallower levels anyway.
        Finally, pits are excluded because it's weird to see an item
        in a pit and yet not be able to identify that the pit is there. */
-    if (kind != NO_TRAP && lvl <= (unsigned) rnd(4)
+    if (kind != NO_TRAP && !(mktrapflags & MKTRAP_NOVICTIM)
+        && lvl <= (unsigned) rnd(4)
         && kind != SQKY_BOARD && kind != RUST_TRAP
         /* rolling boulder trap might not have a boulder if there was no
            viable path (such as when placed in the corner of a room), in
@@ -1724,27 +1734,27 @@ static struct mkroom *
 generate_stairs_find_room(void)
 {
     struct mkroom *croom;
-    int i, phase, tryct = 0;
+    int i, phase, ai;
+    int *rmarr;
 
     if (!gn.nroom)
         return (struct mkroom *) 0;
 
-    for (phase = 2; phase > -1; phase--) {
-        do {
-            croom = &gr.rooms[rn2(gn.nroom)];
-            if (generate_stairs_room_good(croom, phase))
-                return croom;
-        } while (tryct++ < 50);
-    }
+    rmarr = (int *) alloc(sizeof(int) * gn.nroom);
 
-    for (phase = 2; phase > -2; phase--) {
-        for (i = 0; i < gn.nroom; i++) {
-            croom = &gr.rooms[i];
-            if (generate_stairs_room_good(croom, phase))
-                return croom;
+    for (phase = 2; phase > -1; phase--) {
+        ai = 0;
+        for (i = 0; i < gn.nroom; i++)
+            if (generate_stairs_room_good(&gr.rooms[i], phase))
+                rmarr[ai++] = i;
+        if (ai > 0) {
+            i = rmarr[rn2(ai)];
+            free(rmarr);
+            return &gr.rooms[i];
         }
     }
 
+    free(rmarr);
     croom = &gr.rooms[rn2(gn.nroom)];
     return croom;
 }

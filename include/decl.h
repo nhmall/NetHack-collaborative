@@ -245,6 +245,10 @@ extern const struct class_sym def_monsyms[MAXMCLASSES];
 /* current mon class symbols */
 extern uchar monsyms[MAXMCLASSES];
 
+/* lua callback queue names */
+extern const char * const nhcb_name[];
+extern int nhcb_counts[];
+
 #include "obj.h"
 extern NEARDATA struct obj *uarm, *uarmc, *uarmh, *uarms, *uarmg, *uarmf,
     *uarmu, /* under-wear, so to speak */
@@ -788,6 +792,9 @@ struct instance_globals_b {
 
     /* pickup.c */
     boolean bucx_filter;
+
+    /* zap.c */
+    struct monst *buzzer; /* zapper/caster/breather who initiates buzz() */
 
     boolean havestate;
     unsigned long magic; /* validate that structure layout is preserved */

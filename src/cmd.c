@@ -482,6 +482,15 @@ can_do_extcmd(const struct ext_func_tab *extcmd)
 {
     int ecflags = extcmd->flags;
 
+    if (gl.luacore && nhcb_counts[NHCB_CMD_BEFORE]) {
+        lua_getglobal(gl.luacore, "nh_callback_run");
+        lua_pushstring(gl.luacore, nhcb_name[NHCB_CMD_BEFORE]);
+        lua_pushstring(gl.luacore, extcmd->ef_txt);
+        nhl_pcall(gl.luacore, 2, 1);
+        if (!lua_toboolean(gl.luacore, -1))
+            return FALSE;
+    }
+
     if (!wizard && (ecflags & WIZMODECMD)) {
         pline(unavailcmd, extcmd->ef_txt);
         return FALSE;
@@ -1207,18 +1216,23 @@ wiz_makemap(void)
     return ECMD_OK;
 }
 
-/* the #wizmap command - reveal the level map and any traps on it */
+/* the #wizmap command - reveal the level map
+   and any traps or engravings on it */
 static int
 wiz_map(void)
 {
     if (wizard) {
         struct trap *t;
+        struct engr *ep;
         long save_Hconf = HConfusion, save_Hhallu = HHallucination;
 
         HConfusion = HHallucination = 0L;
         for (t = gf.ftrap; t != 0; t = t->ntrap) {
             t->tseen = 1;
             map_trap(t, TRUE);
+        }
+        for (ep = head_engr; ep != 0; ep = ep->nxt_engr) {
+            map_engraving(ep, TRUE);
         }
         do_mapping();
         HConfusion = save_Hconf;
@@ -3607,6 +3621,29 @@ cmd_from_func(int (*fn)(void))
     return '\0';
 }
 
+/* return visual interpretation of the key bound to extended command,
+   or the ext cmd name if not bound to any key. */
+char *
+cmd_from_ecname(const char *ecname)
+{
+    static char cmdnamebuf[QBUFSZ];
+    const struct ext_func_tab *extcmd;
+
+    for (extcmd = extcmdlist; extcmd->ef_txt; ++extcmd)
+        if (!strcmp(extcmd->ef_txt, ecname)) {
+            char key = cmd_from_func(extcmd->ef_funct);
+
+            if (key)
+                Sprintf(cmdnamebuf, "%s", visctrl(key));
+            else
+                Sprintf(cmdnamebuf, "#%s", ecname);
+            return cmdnamebuf;
+        }
+
+    cmdnamebuf[0] = '\0';
+    return cmdnamebuf;
+}
+
 static const char *
 ecname_from_fn(int (*fn)(void))
 {
@@ -5169,6 +5206,7 @@ getdir(const char *s)
     }
 
  retry:
+    gp.program_state.getting_a_command = 1; /* arrow key support for curses */
     if (gi.in_doagain || *readchar_queue)
         dirsym = readchar();
     else
@@ -6199,7 +6237,7 @@ get_count(
             inkey = '\0';
         } else {
             gp.program_state.getting_a_command = 1; /* readchar altmeta
-                                                    * compatibility */
+                                                     * compatibility */
             key = readchar();
         }
 
@@ -6260,8 +6298,8 @@ parse(void)
     flush_screen(1); /* Flush screen buffer. Put the cursor on the hero. */
 
     gp.program_state.getting_a_command = 1; /* affects readchar() behavior for
-                                            * ESC iff 'altmeta' option is On;
-                                            * reset to 0 by readchar() */
+                                             * ESC iff 'altmeta' option is On;
+                                             * reset to 0 by readchar() */
     if (!gc.Cmd.num_pad || (foo = readchar()) == gc.Cmd.spkeys[NHKF_COUNT]) {
         foo = get_count((char *) 0, '\0', LARGEST_INT,
                         &gc.command_count, GC_NOFLAGS);
@@ -6405,8 +6443,8 @@ readchar_core(coordxy *x, coordxy *y, int *mod)
         click_to_cmd(*x, *y, *mod);
     }
     gp.program_state.getting_a_command = 0; /* next readchar() will be for an
-                                            * ordinary char unless parse()
-                                            * sets this back to 1 */
+                                             * ordinary char unless parse()
+                                             * sets this back to 1 */
     return (char) sym;
 }
 

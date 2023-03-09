@@ -174,3 +174,87 @@ function table_stringify(tbl)
    -- pline("table_stringify:(%s)", str);
    return "{" .. str .. "}";
 end
+
+--
+-- TUTORIAL
+--
+
+-- extended commands available in tutorial
+local tutorial_whitelist_commands = {
+   ["movesouth"] = true,
+   ["movenorth"] = true,
+   ["moveeast"]  = true,
+   ["movewest"]  = true,
+   ["movesoutheast"] = true,
+   ["movenorthwest"] = true,
+   ["movenortheast"]  = true,
+   ["movesouthwest"]  = true,
+   ["kick"] = true,
+   ["search"] = true,
+   ["pickup"] = true,
+   ["wear"] = true,
+   ["wield"] = true,
+   -- ["save"] = true,
+};
+
+function tutorial_cmd_before(cmd)
+   -- nh.pline("TUT:cmd_before:" .. cmd);
+
+   if (tutorial_whitelist_commands[cmd]) then
+      return true;
+   else
+      return false;
+   end
+end
+
+function tutorial_enter()
+   -- nh.pline("TUT:enter");
+   nh.gamestate();
+end
+
+function tutorial_leave()
+   -- nh.pline("TUT:leave");
+
+   -- remove the tutorial level callbacks
+   nh.callback("cmd_before", "tutorial_cmd_before", true);
+   nh.callback("level_enter", "tutorial_enter", true);
+   nh.callback("level_leave", "tutorial_leave", true);
+   nh.callback("end_turn", "tutorial_turn", true);
+   nh.gamestate(true);
+end
+
+local tutorial_events = {
+   {
+      ucoord = { 2, 5 },
+      remove = true,
+      func = function()
+         tutorial_whitelist_commands["close"] = true;
+         end,
+   },
+   {
+      ucoord = { 27, 10 },
+      remove = true,
+      func = function()
+         tutorial_whitelist_commands["takeoff"] = true;
+         end,
+   },
+   {
+      ucoord = { 22, 11 },
+      remove = true,
+      func = function()
+         tutorial_whitelist_commands["read"] = true;
+         end,
+   },
+};
+
+function tutorial_turn()
+   for k, v in pairs(tutorial_events) do
+      if ((v.ucoord and u.ux == v.ucoord[1] + 3 and u.uy == v.ucoord[2] + 3)
+         or (v.ucoord == nil)) then
+         if (v.func() or v.remove) then
+            tutorial_events[k] = nil;
+         end
+      end
+   end
+   -- nh.pline("TUT:turn");
+end

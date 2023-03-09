@@ -524,6 +524,16 @@ enum nhcore_calls {
     NUM_NHCORE_CALLS
 };
 
+/* Lua callbacks. TODO: Merge with NHCORE */
+enum nhcb_calls {
+    NHCB_CMD_BEFORE = 0,
+    NHCB_LVL_ENTER,
+    NHCB_LVL_LEAVE,
+    NHCB_END_TURN,
+
+    NUM_NHCB
+};
+
 /* Macros for messages referring to hands, eyes, feet, etc... */
 enum bodypart_types {
     ARM       =  0,
@@ -584,6 +594,7 @@ enum bodypart_types {
 #define MKTRAP_MAZEFLAG      0x1 /* trap placed on coords as if in maze */
 #define MKTRAP_NOSPIDERONWEB 0x2 /* web will not generate a spider */
 #define MKTRAP_SEEN          0x4 /* trap is seen */
+#define MKTRAP_NOVICTIM      0x8 /* no victim corpse or items on it */
 
 #define MON_POLE_DIST 5 /* How far monsters can use pole-weapons */
 #define PET_MISSILE_RANGE2 36 /* Square of distance within which pets shoot */
@@ -666,12 +677,12 @@ enum getobj_callback_returns {
 #define BZ_U_SPELL(bztyp) (10 + (bztyp))
 /* hero breathing as a monster */
 #define BZ_U_BREATH(bztyp) (20 + (bztyp))
+/* monster shooting a wand */
+#define BZ_M_WAND(bztyp) (-0 - (bztyp))
 /* monster casting a spell */
 #define BZ_M_SPELL(bztyp) (-10 - (bztyp))
 /* monster breathing */
 #define BZ_M_BREATH(bztyp) (-20 - (bztyp))
-/* monster shooting a wand */
-#define BZ_M_WAND(bztyp) (-30 - (bztyp))
 
 /*
  * option setting restrictions

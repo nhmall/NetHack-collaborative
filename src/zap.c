@@ -52,25 +52,31 @@ static void wishcmdassist(int);
 #define M_IN_WATER(ptr) \
     ((ptr)->mlet == S_EEL || amphibious(ptr) || is_swimmer(ptr))
 
-static const char are_blinded_by_the_flash[] =
-    "are blinded by the flash!";
+static const char are_blinded_by_the_flash[] = "are blinded by the flash!";
 
-static const char *const flash_types[] =
-    {
-        "magic missile", /* Wands must be 0-9 */
-        "bolt of fire", "bolt of cold", "sleep ray", "death ray",
-        "bolt of lightning", "", "", "", "",
+/*
+ * FIXME:
+ *  flash_types[0] for wand of magic missile is ambiguous.
+ *  A positive index means zapped/cast/breathed by hero.
+ *  A negative index means zapped/cast/breathed by a monster.
+ *  Since abs(-0)==abs(0), there's no way to tell who zapped a wand of
+ *  magic missile by just checking the index.
+ */
+static const char *const flash_types[] = {
+    "magic missile", /* Wands must be 0-9 */
+    "bolt of fire", "bolt of cold", "sleep ray", "death ray",
+    "bolt of lightning", "", "", "", "",
 
-        "magic missile", /* Spell equivalents must be 10-19 */
-        "fireball", "cone of cold", "sleep ray", "finger of death",
-        "bolt of lightning", /* there is no spell, used for retribution */
-        "", "", "", "",
+    "magic missile", /* Spell equivalents must be 10-19 */
+    "fireball", "cone of cold", "sleep ray", "finger of death",
+    "bolt of lightning", /* there is no spell, used for retribution */
+    "", "", "", "",
 
-        "blast of missiles", /* Dragon breath equivalents 20-29*/
-        "blast of fire", "blast of frost", "blast of sleep gas",
-        "blast of disintegration", "blast of lightning",
-        "blast of poison gas", "blast of acid", "", ""
-    };
+    "blast of missiles", /* Dragon breath equivalents 20-29*/
+    "blast of fire", "blast of frost", "blast of sleep gas",
+    "blast of disintegration", "blast of lightning",
+    "blast of poison gas", "blast of acid", "", ""
+};
 
 /*
  * Recognizing unseen wands by zapping:  in 3.4.3 and earlier, zapping
@@ -132,6 +138,7 @@ learnwand(struct obj *obj)
 int
 bhitm(struct monst *mtmp, struct obj *otmp)
 {
+    int ret = 0;
     boolean wake = TRUE; /* Most 'zaps' should wake monster */
     boolean reveal_invis = FALSE, learn_it = FALSE;
     boolean dbldam = Role_if(PM_KNIGHT) && u.uhave.questart;
@@ -344,6 +351,22 @@ bhitm(struct monst *mtmp, struct obj *otmp)
         } else if (openfallingtrap(mtmp, TRUE, &learn_it)) {
             /* mtmp might now be on the migrating monsters list */
             break;
+        } else if (otyp == SPE_KNOCK) {
+            wake = TRUE;
+            ret = 1;
+            if (mtmp->data->msize < MZ_HUMAN && !m_is_steadfast(mtmp)) {
+                if (canseemon(mtmp))
+                    pline("%s is knocked back!",
+                          Monnam(mtmp));
+                mhurtle(mtmp, mtmp->mx - u.ux, mtmp->my - u.uy, rnd(2));
+            } else {
+                if (canseemon(mtmp))
+                    pline("%s doesn't budge.", Monnam(mtmp));
+            }
+            if (!DEADMONSTER(mtmp)) {
+                wakeup(mtmp, !mindless(mtmp->data));
+                abuse_dog(mtmp);
+            }
         } else if ((obj = which_armor(mtmp, W_SADDLE)) != 0) {
             char buf[BUFSZ];
 
@@ -478,7 +501,7 @@ bhitm(struct monst *mtmp, struct obj *otmp)
        that the wand itself has been seen */
     if (learn_it)
         learnwand(otmp);
-    return 0;
+    return ret;
 }
 
 /* hero is held by a monster or engulfed or holding a monster and has zapped
@@ -2837,10 +2860,10 @@ ubreatheu(struct attack *mattk)
 
 /* light damages hero in gremlin form */
 int
-lightdamage(struct obj *obj,  /* item making light (fake book if spell) */
-            boolean ordinary, /* wand/camera zap vs wand destruction */
-            int amt)          /* pseudo-damage used to determine blindness
-                                 duration */
+lightdamage(
+    struct obj *obj,  /* item making light (fake book if spell) */
+    boolean ordinary, /* wand/camera zap vs wand destruction */
+    int amt)          /* pseudo-damage used to determine blindness duration */
 {
     char buf[BUFSZ];
     const char *how;
@@ -3283,7 +3306,8 @@ weffects(struct obj *obj)
         else if (otyp >= SPE_MAGIC_MISSILE && otyp <= SPE_FINGER_OF_DEATH)
             ubuzz(BZ_U_SPELL(BZ_OFS_SPE(otyp)), u.ulevel / 2 + 1);
         else if (otyp >= WAN_MAGIC_MISSILE && otyp <= WAN_LIGHTNING)
-            ubuzz(BZ_U_WAND(BZ_OFS_WAN(otyp)), (otyp == WAN_MAGIC_MISSILE) ? 2 : 6);
+            ubuzz(BZ_U_WAND(BZ_OFS_WAN(otyp)),
+                  (otyp == WAN_MAGIC_MISSILE) ? 2 : 6);
         else
             impossible("weffects: unexpected spell or wand");
         disclose = TRUE;
@@ -3458,6 +3482,8 @@ maybe_explode_trap(struct trap *ttmp, struct obj *otmp)
  *  This function reveals the absence of a remembered invisible monster in
  *  necessary cases (throwing or kicking weapons).  The presence of a real
  *  one is revealed for a weapon, but if not a weapon is left up to fhitm().
+ *
+ *  If fhitm returns non-zero value, stops the beam and returns the monster
  */
 struct monst *
 bhit(coordxy ddx, coordxy ddy, int range,  /* direction and range */
@@ -3673,7 +3699,10 @@ bhit(coordxy ddx, coordxy ddy, int range,  /* direction and range */
                 goto bhit_done;
             } else {
                 /* ZAPPED_WAND */
-                (*fhitm)(mtmp, obj);
+                if ((*fhitm)(mtmp, obj)) {
+                    result = mtmp;
+                    goto bhit_done;
+                }
                 range -= 3;
             }
         } else {
@@ -4036,7 +4065,10 @@ zhitm(
 }
 
 static void
-zhitu(int type, int nd, const char *fltxt, coordxy sx, coordxy sy)
+zhitu(
+    int type, int nd,
+    const char *fltxt,
+    coordxy sx, coordxy sy)
 {
     int dam = 0, abstyp = abs(type);
 
@@ -4175,11 +4207,47 @@ zhitu(int type, int nd, const char *fltxt, coordxy sx, coordxy sy)
         break;
     }
 
-    /* Half_spell_damage protection yields half-damage for wands & spells,
-       including hero's own ricochets; breath attacks do full damage */
-    if (dam && Half_spell_damage && !(abstyp >= 20 && abstyp <= 29))
-        dam = (dam + 1) / 2;
-    losehp(dam, fltxt, KILLED_BY_AN);
+    /*
+     * 3.7: when fatal, this used to yield "Killed by <fltxt>." without any
+     * information about who was responsible.  Now 'buzzer' is used to try
+     * to supply "zapped/cast/breathed by <mon> [imitating <other_mon>]."
+     *
+     * Room for improvement:  there is no monster available when player is
+     * hit by divine lighting or by Plane of Air thunderstorm so cause of
+     * death remains "killed by a bolt of lightning" w/o extra explanation.
+     *
+     * Wand of death, spell of finger of death, and disintegration breath
+     * don't use this routine so don't include 'inflicted by'.
+     */
+    {
+        char kbuf[BUFSZ];
+        struct obj *otmp = gc.current_wand;
+        /* fire horn and frost horn get handled as wands by caller */
+        const char *verb = (abstyp < 10) /* wand */
+                           ? ((otmp && otmp->oclass == TOOL_CLASS) ? "played"
+                              : "zapped")
+                           : (abstyp < 20) ? "cast"
+                             : (abstyp < 30) ? "exhaled"
+                               : "imagined"; /* should never happen */
+
+        if (type < 0 || (type == 0 && gb.buzzer != 0)) {
+            /* if gb.buzzer is Null, kbuf[] will end up with just <fltxt> */
+            (void) death_inflicted_by(kbuf, fltxt, gb.buzzer);
+            /* change "death inflicted by mon" to "death <verb> by mon" */
+            if (gb.buzzer)
+                (void) strsubst(kbuf, "inflicted", verb);
+        } else {
+            /* FIXME: "zapped by herself" is suitable for a rebound;
+               "zapped at herself" would be better if player explicitly
+               targeted hero */
+            Sprintf(kbuf, "%s %s by %sself", fltxt, verb, uhim());
+        }
+        /* Half_spell_damage protection yields half-damage for wands & spells,
+           including hero's own ricochets; breath attacks do full damage */
+        if (dam && Half_spell_damage && abstyp < 20)
+            dam = (dam + 1) / 2;
+        losehp(dam, kbuf, KILLED_BY_AN);
+    }
     return;
 }
 
@@ -4188,10 +4256,10 @@ zhitu(int type, int nd, const char *fltxt, coordxy sx, coordxy sy)
  * at position x,y; return the number of objects burned
  */
 int
-burn_floor_objects(coordxy x, coordxy y,
-                   boolean give_feedback, /* caller needs to decide about
-                                             visibility checks */
-                   boolean u_caused)
+burn_floor_objects(
+    coordxy x, coordxy y,
+    boolean give_feedback, /* caller needs to decide about visibility checks */
+    boolean u_caused)
 {
     struct obj *obj, *obj2;
     long i, scrquan, delquan;
@@ -4266,9 +4334,10 @@ zap_hit(int ac,
 }
 
 static void
-disintegrate_mon(struct monst *mon,
-                 int type, /* hero vs other */
-                 const char *fltxt)
+disintegrate_mon(
+    struct monst *mon,
+    int type, /* hero vs other */
+    const char *fltxt)
 {
     struct obj *otmp, *otmp2, *m_amulet = mlifesaver(mon);
 
@@ -4406,7 +4475,8 @@ dobuzz(
             if (type >= 0)
                 mon->mstrategy &= ~STRAT_WAITMASK;
  buzzmonst:
-            gn.notonhead = (mon->mx != gb.bhitpos.x || mon->my != gb.bhitpos.y);
+            gn.notonhead = (mon->mx != gb.bhitpos.x
+                            || mon->my != gb.bhitpos.y);
             if (zap_hit(find_mac(mon), spell_type)) {
                 if (mon_reflects(mon, (char *) 0)) {
                     if (cansee(mon->mx, mon->my)) {
@@ -4645,9 +4715,9 @@ melt_ice(coordxy x, coordxy y, const char *msg)
  * permanent instead.
  */
 void
-start_melt_ice_timeout(coordxy x, coordxy y,
-                       long min_time) /* <x,y>'s old melt timeout (deleted by
-                                         time we get here) */
+start_melt_ice_timeout(
+    coordxy x, coordxy y,
+    long min_time) /* <x,y>'s old melt timeout (deleted by time we get here) */
 {
     int when;
     long where;
@@ -4711,6 +4781,7 @@ zap_over_floor(
     struct rm *lev = &levl[x][y];
     boolean see_it = cansee(x, y), yourzap;
     int rangemod = 0, abstype = abs(type) % 10;
+    boolean lavawall = (lev->typ == LAVAWALL);
 
     if (type == PHYS_EXPL_TYPE) {
         /* this won't have any effect on the floor */
@@ -4780,15 +4851,17 @@ zap_over_floor(
         break; /* ZT_FIRE */
 
     case ZT_COLD:
-        if (is_pool(x, y) || is_lava(x, y) || levl[x][y].typ == LAVAWALL) {
-            boolean lava = (is_lava(x, y) || levl[x][y].typ == LAVAWALL),
+        if (is_pool(x, y) || is_lava(x, y) || lavawall) {
+            boolean lava = (is_lava(x, y) || lavawall),
                     moat = is_moat(x, y);
+            int chance = max(2, 5 + gl.level.flags.temperature * 10);
 
-            if (IS_WATERWALL(lev->typ)) {
+            if (IS_WATERWALL(lev->typ) || (lavawall && rn2(chance))) {
                 /* For now, don't let WATER freeze. */
                 Soundeffect(se_soft_crackling, 100);
                 if (see_it)
-                    pline_The("%s freezes for a moment.", hliquid("water"));
+                    pline_The("%s freezes for a moment.",
+                              hliquid(lavawall ? "lava" : "water"));
                 else
                     You_hear("a soft crackling.");
                 rangemod -= 1000; /* stop */
@@ -4804,7 +4877,17 @@ zap_over_floor(
                     lev->icedpool = lava ? 0
                                          : (lev->typ == POOL) ? ICED_POOL
                                                               : ICED_MOAT;
-                    lev->typ = lava ? ROOM : ICE;
+                    if (lavawall) {
+                        if ((isok(x, y-1) && IS_WALL(levl[x][y-1].typ))
+                            || (isok(x, y+1) && IS_WALL(levl[x][y+1].typ)))
+                            lev->typ = VWALL;
+                        else
+                            lev->typ = HWALL;
+                        fix_wall_spines(max(0,x-1), max(0,y-1),
+                                        min(COLNO,x+1), min(ROWNO,y+1));
+                    } else {
+                        lev->typ = lava ? ROOM : ICE;
+                    }
                 }
                 bury_objs(x, y);
                 if (!lava) {
