@@ -1,0 +1,20 @@
+name: C/C++ CI
+
+on:
+  push:
+    branches: [ "NetHack-3.7" ]
+  pull_request:
+    branches: [ "NetHack-3.7" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: nhsetup
+      run: sys/unix/setup.sh sys/unix/hints/linux.370
+    - name: make
+      run: make
+
