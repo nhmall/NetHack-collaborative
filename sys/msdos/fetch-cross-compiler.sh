@@ -11,11 +11,11 @@ else
 fi
 
 if [ -z "$GCCVER" ]; then
-	export GCCVER=gcc1210
+       export GCCVER=gcc1220
 fi
 
 if [ -z "$LUA_VERSION" ]; then
-	export LUA_VERSION=5.4.4
+	export LUA_VERSION=5.4.6
 fi
 
 if [ ! -d "$(pwd)/lib" ]; then
@@ -27,7 +27,8 @@ fi
 #DJGPP_URL="https://github.com/andrewwutw/build-djgpp/releases/download/v3.0/"
 #DJGPP_URL="https://github.com/andrewwutw/build-djgpp/releases/download/v3.1/"
 #DJGPP_URL="https://github.com/andrewwutw/build-djgpp/releases/download/v3.1/"
-DJGPP_URL="https://github.com/andrewwutw/build-djgpp/releases/download/v3.3/"
+#DJGPP_URL="https://github.com/andrewwutw/build-djgpp/releases/download/v3.3/"
+DJGPP_URL="https://github.com/andrewwutw/build-djgpp/releases/download/v3.4/"
 
 if [ "$(uname)" = "Darwin" ]; then
     #Mac
@@ -78,7 +79,10 @@ if [ ! -d djgpp/cwsdpmi ]; then
       	#Mac
 	curl http://sandmann.dotster.com/cwsdpmi/csdpmi7b.zip -o csdpmi7b.zip
     else
-	wget --quiet --no-hsts http://sandmann.dotster.com/cwsdpmi/csdpmi7b.zip
+        wget --quiet --no-hsts https://www.delorie.com/pub/djgpp/current/v2misc/csdpmi7b.zip
+        if [ $? -ne 0 ]; then
+	    wget --quiet --no-hsts --timeout=20 http://sandmann.dotster.com/cwsdpmi/csdpmi7b.zip
+        fi
     fi
     cd djgpp
     mkdir -p cwsdpmi
@@ -130,6 +134,31 @@ if [ ! -d djgpp/djgpp-patch ]; then
     patch -p0 -l -i ../../../sys/msdos/exceptn.S.patch
     cd ../../
 fi
+
+# get a copy of symify to insert in the final zip package
+# to make bug reports more useful
+# curl --output djdev205.zip http://www.mirrorservice.org/sites/ftp.delorie.com/pub/djgpp/current/v2/djdev205.zip
+if [ ! -d djgpp/symify ]; then
+    echo "Getting djdev205.zip" ;
+    cd djgpp
+    mkdir -p symify
+    cd symify
+    if [ "$(uname)" = "Darwin" ]; then
+	#Mac
+	curl --output djdev205.zip http://www.mirrorservice.org/sites/ftp.delorie.com/pub/djgpp/current/v2/djdev205.zip
+        export cmdstatus=$?
+    else
+	wget --quiet --no-hsts http://www.mirrorservice.org/sites/ftp.delorie.com/pub/djgpp/current/v2/djdev205.zip
+        export cmdstatus=$?
+    fi
+    ls -l
+    if [ $cmdstatus -eq 0 ]; then
+	echo "fetch of symify was successful"
+	unzip -p djdev205.zip bin/symify.exe >./simify.exe
+    fi
+    cd ../../
+fi
+
 
 FONT_VERSION="4.49"
 FONT_FILE="terminus-font-$FONT_VERSION"

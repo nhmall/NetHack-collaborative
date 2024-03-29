@@ -1,4 +1,4 @@
-/* NetHack 3.7	lock.c	$NHDT-Date: 1654464994 2022/06/05 21:36:34 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.114 $ */
+/* NetHack 3.7	lock.c	$NHDT-Date: 1703070191 2023/12/20 11:03:11 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.131 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2011. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -6,12 +6,12 @@
 #include "hack.h"
 
 /* occupation callbacks */
-static int picklock(void);
-static int forcelock(void);
+staticfn int picklock(void);
+staticfn int forcelock(void);
 
-static const char *lock_action(void);
-static boolean obstructed(coordxy, coordxy, boolean);
-static void chest_shatter_msg(struct obj *);
+staticfn const char *lock_action(void);
+staticfn boolean obstructed(coordxy, coordxy, boolean);
+staticfn void chest_shatter_msg(struct obj *);
 
 boolean
 picking_lock(coordxy *x, coordxy *y)
@@ -33,7 +33,7 @@ picking_at(coordxy x, coordxy y)
 }
 
 /* produce an occupation string appropriate for the current activity */
-static const char *
+staticfn const char *
 lock_action(void)
 {
     /* "unlocking"+2 == "locking" */
@@ -63,7 +63,7 @@ lock_action(void)
 }
 
 /* try to open/close a lock */
-static int
+staticfn int
 picklock(void)
 {
     if (gx.xlock.box) {
@@ -207,7 +207,7 @@ breakchestlock(struct obj *box, boolean destroyit)
 }
 
 /* try to force a locked chest */
-static int
+staticfn int
 forcelock(void)
 {
     if ((gx.xlock.box->ox != u.ux) || (gx.xlock.box->oy != u.uy))
@@ -569,7 +569,7 @@ pick_lock(
         }
         if (!IS_DOOR(door->typ)) {
             int res = PICKLOCK_DID_NOTHING, oldglyph = door->glyph;
-            schar oldlastseentyp = gl.lastseentyp[cc.x][cc.y];
+            schar oldlastseentyp = update_mapseen_for(cc.x, cc.y);
 
             /* this is probably only relevant when blind */
             feel_location(cc.x, cc.y);
@@ -667,8 +667,8 @@ RESTORE_WARNING_FORMAT_NONLITERAL
 int
 doforce(void)
 {
-    register struct obj *otmp;
-    register int c, picktyp;
+    struct obj *otmp;
+    int c, picktyp;
     char qbuf[QBUFSZ];
 
     /*
@@ -769,7 +769,7 @@ int
 doopen_indir(coordxy x, coordxy y)
 {
     coord cc;
-    register struct rm *door;
+    struct rm *door;
     boolean portcullis;
     const char *dirprompt;
     int res = ECMD_OK;
@@ -794,8 +794,9 @@ doopen_indir(coordxy x, coordxy y)
         return ECMD_OK;
     }
 
-    /* open at yourself/up/down */
-    if (u_at(cc.x, cc.y))
+    /* open at yourself/up/down: switch to loot unless there is a closed
+       door here (possible with Passes_walls) and direction isn't 'down' */
+    if (u_at(cc.x, cc.y) && (u.dz > 0 || !closed_door(u.ux, u.uy)))
         return doloot();
 
     /* this used to be done prior to get_adjacent_loc() but doing so was
@@ -818,7 +819,7 @@ doopen_indir(coordxy x, coordxy y)
     /* this used to be 'if (Blind)' but using a key skips that so we do too */
     {
         int oldglyph = door->glyph;
-        schar oldlastseentyp = gl.lastseentyp[cc.x][cc.y];
+        schar oldlastseentyp = update_mapseen_for(cc.x, cc.y);
 
         newsym(cc.x, cc.y);
         if (door->glyph != oldglyph
@@ -859,6 +860,7 @@ doopen_indir(coordxy x, coordxy y)
             locked = TRUE;
             break;
         }
+        set_msg_xy(cc.x, cc.y);
         pline("This door%s.", mesg);
         if (locked && flags.autounlock) {
             struct obj *unlocktool;
@@ -886,6 +888,7 @@ doopen_indir(coordxy x, coordxy y)
 
     /* door is known to be CLOSED */
     if (rnl(20) < (ACURRSTR + ACURR(A_DEX) + ACURR(A_CON)) / 3) {
+        set_msg_xy(cc.x, cc.y);
         pline_The("door opens.");
         if (door->doormask & D_TRAPPED) {
             b_trapped("door", FINGER);
@@ -898,13 +901,14 @@ doopen_indir(coordxy x, coordxy y)
         unblock_point(cc.x, cc.y); /* vision: new see through there */
     } else {
         exercise(A_STR, TRUE);
+        set_msg_xy(cc.x, cc.y);
         pline_The("door resists!");
     }
 
     return ECMD_TIME;
 }
 
-static boolean
+staticfn boolean
 obstructed(coordxy x, coordxy y, boolean quietly)
 {
     struct monst *mtmp = m_at(x, y);
@@ -938,8 +942,8 @@ obstructed(coordxy x, coordxy y, boolean quietly)
 int
 doclose(void)
 {
-    register coordxy x, y;
-    register struct rm *door;
+    coordxy x, y;
+    struct rm *door;
     boolean portcullis;
     int res = ECMD_OK;
 
@@ -958,7 +962,7 @@ doclose(void)
 
     x = u.ux + u.dx;
     y = u.uy + u.dy;
-    if (u_at(x, y)) {
+    if (u_at(x, y) && !Passes_walls) {
         You("are in the way!");
         return ECMD_TIME;
     }
@@ -978,7 +982,7 @@ doclose(void)
     portcullis = (is_drawbridge_wall(x, y) >= 0);
     if (Blind) {
         int oldglyph = door->glyph;
-        schar oldlastseentyp = gl.lastseentyp[x][y];
+        schar oldlastseentyp = update_mapseen_for(x, y);
 
         feel_location(x, y);
         if (door->glyph != oldglyph || gl.lastseentyp[x][y] != oldlastseentyp)
@@ -1055,8 +1059,8 @@ boxlock(struct obj *obj, struct obj *otmp) /* obj *is* a box */
         break;
     case WAN_OPENING:
     case SPE_KNOCK:
-        if (obj->olocked) { /* unlock; couldn't be broken */
-            pline("Klick!");
+        if (obj->olocked) { /* unlock; isn't broken so doesn't need fixing */
+            Soundeffect(se_klick, 50);
             pline("Klick!");
             obj->olocked = 0;
             res = 1;
@@ -1083,7 +1087,7 @@ boxlock(struct obj *obj, struct obj *otmp) /* obj *is* a box */
 boolean
 doorlock(struct obj *otmp, coordxy x, coordxy y)
 {
-    register struct rm *door = &levl[x][y];
+    struct rm *door = &levl[x][y];
     boolean res = TRUE;
     int loudness = 0;
     const char *msg = (const char *) 0;
@@ -1198,7 +1202,7 @@ doorlock(struct obj *otmp, coordxy x, coordxy y)
                 } else {
                     /* for mtmp, mb_trapped() does is own wake_nearto() */
                     loudness = 40;
-                    if (Verbose(1, doorlock1)) {
+                    if (flags.verbose) {
                         Soundeffect(se_kaboom_door_explodes, 75);
                         if ((sawit || seeit) && !Unaware) {
                             pline("KABOOM!!  You see a door explode.");
@@ -1217,7 +1221,7 @@ doorlock(struct obj *otmp, coordxy x, coordxy y)
             unblock_point(x, y);
             seeit = cansee(x, y);
             newsym(x, y);
-            if (Verbose(1, doorlock2)) {
+            if (flags.verbose) {
                 if ((sawit || seeit) && !Unaware) {
                     pline_The("door crashes open!");
                 } else if (!Deaf) {
@@ -1253,12 +1257,12 @@ doorlock(struct obj *otmp, coordxy x, coordxy y)
     return res;
 }
 
-static void
+staticfn void
 chest_shatter_msg(struct obj *otmp)
 {
     const char *disposition;
     const char *thing;
-    long save_Blinded;
+    long save_HBlinded, save_BBlinded;
 
     if (otmp->oclass == POTION_CLASS) {
         You("%s %s shatter!", Blind ? "hear" : "see", an(bottlename()));
@@ -1268,10 +1272,10 @@ chest_shatter_msg(struct obj *otmp)
     }
     /* We have functions for distant and singular names, but not one */
     /* which does _both_... */
-    save_Blinded = Blinded;
-    Blinded = 1;
+    save_HBlinded = HBlinded,  save_BBlinded = BBlinded;
+    HBlinded = 1L,  BBlinded = 0L;
     thing = singular(otmp, xname);
-    Blinded = save_Blinded;
+    HBlinded = save_HBlinded,  BBlinded = save_BBlinded;
     switch (objects[otmp->otyp].oc_material) {
     case PAPER:
         disposition = "is torn to shreds";

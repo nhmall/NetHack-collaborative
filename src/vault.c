@@ -5,18 +5,19 @@
 
 #include "hack.h"
 
-static boolean clear_fcorr(struct monst *, boolean);
-static void blackout(coordxy, coordxy);
-static void restfakecorr(struct monst *);
-static void parkguard(struct monst *);
-static boolean in_fcorridor(struct monst *, coordxy, coordxy);
-static boolean find_guard_dest(struct monst *, coordxy *, coordxy *);
-static void move_gold(struct obj *, int);
-static void wallify_vault(struct monst *);
-static void gd_mv_monaway(struct monst *, int, int);
-static void gd_pick_corridor_gold(struct monst *, int, int);
-static int gd_move_cleanup(struct monst *, boolean, boolean);
-static void gd_letknow(struct monst *);
+staticfn boolean clear_fcorr(struct monst *, boolean) NONNULLARG1;
+staticfn void blackout(coordxy, coordxy);
+staticfn void restfakecorr(struct monst *) NONNULLARG1;
+staticfn void parkguard(struct monst *) NONNULLARG1;
+staticfn boolean in_fcorridor(struct monst *, coordxy, coordxy) NONNULLARG1;
+staticfn boolean find_guard_dest(struct monst *, coordxy *, coordxy *)
+                                 NONNULLARG23;
+staticfn void move_gold(struct obj *, int) NONNULLARG1;
+staticfn void wallify_vault(struct monst *) NONNULLARG1;
+staticfn void gd_mv_monaway(struct monst *, int, int) NONNULLARG1;
+staticfn void gd_pick_corridor_gold(struct monst *, int, int) NONNULLARG1;
+staticfn int gd_move_cleanup(struct monst *, boolean, boolean) NONNULLARG1;
+staticfn void gd_letknow(struct monst *) NONNULLARG1;
 
 void
 newegd(struct monst *mtmp)
@@ -42,7 +43,7 @@ free_egd(struct monst *mtmp)
 /* try to remove the temporary corridor (from vault to rest of map) being
    maintained by guard 'grd'; if guard is still in it, removal will fail,
    to be tried again later */
-static boolean
+staticfn boolean
 clear_fcorr(struct monst *grd, boolean forceshow)
 {
     coordxy fcx, fcy, fcbeg;
@@ -96,6 +97,7 @@ clear_fcorr(struct monst *grd, boolean forceshow)
             if (lev->typ == STONE)
                 blackout(fcx, fcy);
         }
+        del_engr_at(fcx, fcy);
         map_location(fcx, fcy, 1); /* bypass vision */
         if (!ACCESSIBLE(lev->typ))
             block_point(fcx, fcy);
@@ -117,7 +119,7 @@ clear_fcorr(struct monst *grd, boolean forceshow)
    spots to unlit; if player used scroll/wand/spell of light while inside
    the corridor, we don't want the light to reappear if/when a new tunnel
    goes through the same area */
-static void
+staticfn void
 blackout(coordxy x, coordxy y)
 {
     struct rm *lev;
@@ -138,7 +140,7 @@ blackout(coordxy x, coordxy y)
         }
 }
 
-static void
+staticfn void
 restfakecorr(struct monst *grd)
 {
     /* it seems you left the corridor - let the guard disappear */
@@ -149,7 +151,7 @@ restfakecorr(struct monst *grd)
 }
 
 /* move guard--dead to alive--to <0,0> until temporary corridor is removed */
-static void
+staticfn void
 parkguard(struct monst *grd)
 {
     /* either guard is dead or will now be treated as if so;
@@ -186,10 +188,10 @@ grddead(struct monst *grd)
     return dispose;
 }
 
-static boolean
+staticfn boolean
 in_fcorridor(struct monst *grd, coordxy x, coordxy y)
 {
-    register int fci;
+    int fci;
     struct egd *egrd = EGD(grd);
 
     for (fci = egrd->fcbeg; fci < egrd->fcend; fci++)
@@ -241,7 +243,7 @@ vault_summon_gd(void)
 char
 vault_occupied(char *array)
 {
-    register char *ptr;
+    char *ptr;
 
     for (ptr = array; *ptr; ptr++)
         if (gr.rooms[*ptr - ROOMOFFSET].rtype == VAULT)
@@ -275,7 +277,7 @@ uleftvault(struct monst *grd)
     }
 }
 
-static boolean
+staticfn boolean
 find_guard_dest(struct monst *guard, coordxy *rx, coordxy *ry)
 {
     coordxy x, y, dd, lx, ly;
@@ -369,7 +371,7 @@ invault(void)
             }
         }
         while (levl[x][y].typ == ROOM) {
-            register int dx, dy;
+            int dx, dy;
 
             dx = (gdx > x) ? 1 : (gdx < x) ? -1 : 0;
             dy = (gdy > y) ? 1 : (gdy < y) ? -1 : 0;
@@ -465,7 +467,7 @@ invault(void)
             return;
         }
         if (Strangled || is_silent(gy.youmonst.data) || gm.multi < 0) {
-            /* [we ought to record whether this this message has already
+            /* [we ought to record whether this message has already
                been given in order to vary it upon repeat visits, but
                discarding the monster and its egd data renders that hard] */
             if (Deaf) {
@@ -614,7 +616,7 @@ invault(void)
     }
 }
 
-static void
+staticfn void
 move_gold(struct obj *gold, int vroom)
 {
     coordxy nx, ny;
@@ -628,7 +630,7 @@ move_gold(struct obj *gold, int vroom)
     newsym(nx, ny);
 }
 
-static void
+staticfn void
 wallify_vault(struct monst *grd)
 {
     int typ;
@@ -689,6 +691,7 @@ wallify_vault(struct monst *grd)
                 levl[x][y].typ = typ;
                 levl[x][y].wall_info = 0;
                 xy_set_wall_state(x, y); /* set WA_MASK bits in .wall_info */
+                del_engr_at(x, y);
                 /*
                  * hack: player knows walls are restored because of the
                  * message, below, so show this on the screen.
@@ -714,7 +717,7 @@ wallify_vault(struct monst *grd)
     }
 }
 
-static void
+staticfn void
 gd_mv_monaway(struct monst *grd, int nx, int ny)
 {
     struct monst *mtmp = m_at(nx, ny);
@@ -731,7 +734,7 @@ gd_mv_monaway(struct monst *grd, int nx, int ny)
 
 /* have guard pick gold off the floor, possibly moving to the gold's
    position before message and back to his current spot after */
-static void
+staticfn void
 gd_pick_corridor_gold(struct monst *grd, int goldx, int goldy)
 {
     struct obj *gold;
@@ -815,7 +818,7 @@ gd_pick_corridor_gold(struct monst *grd, int goldx, int goldy)
 
 
 /* return 1: guard moved, -2: died  */
-static int
+staticfn int
 gd_move_cleanup(
     struct monst *grd,
     boolean semi_dead,
@@ -848,7 +851,7 @@ gd_move_cleanup(
     return -2;
 }
 
-static void
+staticfn void
 gd_letknow(struct monst *grd)
 {
     if (!cansee(grd->mx, grd->my) || !mon_visible(grd))
@@ -870,12 +873,12 @@ gd_letknow(struct monst *grd)
 int
 gd_move(struct monst *grd)
 {
-    coordxy x, y, nx, ny, m, n;
+    coordxy x, y, nx, ny, m, n, ex, ey;
     coordxy dx, dy, ggx = 0, ggy = 0, fci;
     uchar typ;
     struct rm *crm;
     struct fakecorridor *fcp;
-    register struct egd *egrd = EGD(grd);
+    struct egd *egrd = EGD(grd);
     long umoney = 0L;
     boolean goldincorridor = FALSE, u_in_vault = FALSE, grd_in_vault = FALSE,
             semi_dead = DEADMONSTER(grd),
@@ -954,6 +957,7 @@ gd_move(struct monst *grd)
                 mnexto(grd, RLOC_NOMSG);
                 levl[m][n].typ = egrd->fakecorr[0].ftyp;
                 levl[m][n].flags = egrd->fakecorr[0].flags;
+                del_engr_at(m, n);
                 newsym(m, n);
                 return -1;
             }
@@ -970,6 +974,7 @@ gd_move(struct monst *grd)
                 (void) rloc(grd, RLOC_MSG);
                 levl[m][n].typ = egrd->fakecorr[0].ftyp;
                 levl[m][n].flags = egrd->fakecorr[0].flags;
+                del_engr_at(m, n);
                 newsym(m, n);
                 grd->mpeaceful = 0;
                 gd_letknow(grd);
@@ -1079,6 +1084,7 @@ gd_move(struct monst *grd)
                         crm->doormask = D_NODOOR;
                     else
                         crm->flags = 0;
+                    del_engr_at(nx, ny);
                     goto proceed;
                 }
             }
@@ -1098,12 +1104,14 @@ gd_move(struct monst *grd)
         ny += dy;
 
     while ((typ = (crm = &levl[nx][ny])->typ) != STONE) {
+        ex = nx + nx - x;
+        ey = ny + ny - y;
         /* in view of the above we must have IS_WALL(typ) or typ == POOL */
         /* must be a wall here */
-        if (isok(nx + nx - x, ny + ny - y) && !IS_POOL(typ)
-            && IS_ROOM(levl[nx + nx - x][ny + ny - y].typ)) {
+        if (isok(ex, ey) && IS_ROOM(levl[ex][ey].typ)) {
             crm->typ = DOOR;
             crm->doormask = D_NODOOR;
+            del_engr_at(ex, ey);
             goto proceed;
         }
         if (dy && nx != x) {
@@ -1121,6 +1129,7 @@ gd_move(struct monst *grd)
         if (IS_ROOM(typ)) {
             crm->typ = DOOR;
             crm->doormask = D_NODOOR;
+            del_engr_at(ex, ey);
             goto proceed;
         }
         break;

@@ -15,7 +15,6 @@ extern WINDOW *mapwin, *statuswin, *messagewin;    /* Main windows  */
 extern WINDOW *activemenu;         /* curses window for menu requesting a
                                     * count; affects count_window refresh */
 
-#define TEXTCOLOR   /* Allow color */
 #define NHW_END 19
 #define OFF 0
 #define ON 1
@@ -33,8 +32,9 @@ extern WINDOW *activemenu;         /* curses window for menu requesting a
 #define STATUS_WIN  2
 #define MAP_WIN     3
 #define INV_WIN     4
-#define NHWIN_MAX   5
-#define MESG_HISTORY_MAX   200
+#define TEXT_WIN    5
+#define MENU_WIN    6
+#define NHWIN_MAX   7
 #if !defined(__APPLE__) || !defined(NCURSES_VERSION)
 # define USE_DARKGRAY /* Allow "bright" black; delete if not visible */
 #endif  /* !__APPLE__ && !PDCURSES */
@@ -46,6 +46,9 @@ extern WINDOW *activemenu;         /* curses window for menu requesting a
 #endif
 #if !defined(A_RIGHTLINE) && defined(A_RIGHT)
 #define A_RIGHTLINE A_RIGHT
+#endif
+#ifndef A_ITALIC
+#define A_ITALIC A_UNDERLINE
 #endif
 
 typedef enum orient_type
@@ -79,6 +82,7 @@ extern void curses_display_nhwindow(winid wid, boolean block);
 extern void curses_destroy_nhwindow(winid wid);
 extern void curses_curs(winid wid, int x, int y);
 extern void curses_putstr(winid wid, int attr, const char *text);
+extern void curses_putmixed(winid window, int attr, const char *str);
 extern void curses_display_file(const char *filename, boolean must_exist);
 extern void curses_start_menu(winid wid, unsigned long);
 extern void curses_add_menu(winid wid, const glyph_info *,
@@ -115,7 +119,9 @@ extern win_request_info *curses_ctrl_nhwindow(winid, int, win_request_info *);
 
 /* curswins.c */
 
-extern WINDOW *curses_create_window(int width, int height, orient orientation);
+extern WINDOW *curses_create_window(int wid, int width, int height, orient orientation);
+extern void curses_set_wid_colors(int wid, WINDOW *win);
+extern void curses_parse_wid_colors(int wid, char *fg, char *bg);
 extern void curses_destroy_win(WINDOW *win);
 extern WINDOW *curses_get_nhwin(winid wid);
 extern void curses_add_nhwin(winid wid, int height, int width, int y,
@@ -164,14 +170,13 @@ extern boolean curses_is_menu(winid wid);
 extern boolean curses_is_text(winid wid);
 extern int curses_convert_glyph(int ch, int glyph);
 extern void curses_move_cursor(winid wid, int x, int y);
+extern void curses_update_stdscr_cursor(void);
 extern void curses_prehousekeeping(void);
 extern void curses_posthousekeeping(void);
 extern void curses_view_file(const char *filename, boolean must_exist);
 extern void curses_rtrim(char *str);
 extern long curses_get_count(int first_digit);
-extern int curses_convert_attr(int attr);
-extern int curses_read_attrs(const char *attrs);
-extern char *curses_fmt_attrs(char *);
+extern attr_t curses_convert_attr(int attr);
 extern int curses_convert_keys(int key);
 extern int curses_get_mouse(coordxy *mousex, coordxy *mousey, int *mod);
 extern void curses_mouse_support(int);
@@ -186,7 +191,7 @@ extern int curses_ext_cmd(void);
 extern void curses_create_nhmenu(winid wid, unsigned long);
 extern void curses_add_nhmenu_item(winid wid, const glyph_info *,
                                    const ANY_P *identifier, char accelerator,
-                                   char group_accel, int attr,
+                                   char group_accel, int attr, int clr,
                                    const char *str, unsigned itemflags);
 extern void curs_menu_set_bottom_heavy(winid);
 extern void curses_finalize_nhmenu(winid wid, const char *prompt);
@@ -205,11 +210,13 @@ extern void curses_status_update(int, genericptr_t, int, int, int,
 
 extern void curs_purge_perminv_data(boolean);
 extern void curs_update_invt(int);
-extern void curs_add_invt(int, char, attr_t, const char *);
+extern void curs_add_invt(int, char, attr_t, int, const char *);
 
 /* cursinit.c */
 
 extern void curses_create_main_windows(void);
+extern int curses_init_rgb(int r, int g, int b);
+extern int curses_init_pair(int fg, int bg);
 extern void curses_init_nhcolors(void);
 extern void curses_choose_character(void);
 extern int curses_character_dialog(const char **choices, const char *prompt);

@@ -1,4 +1,4 @@
-/* NetHack 3.7	pline.c	$NHDT-Date: 1646255375 2022/03/02 21:09:35 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.109 $ */
+/* NetHack 3.7	pline.c	$NHDT-Date: 1693083243 2023/08/26 20:54:03 $  $NHDT-Branch: keni-crashweb2 $:$NHDT-Revision: 1.124 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2018. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -9,15 +9,15 @@
                               * config file parsing) with modest decoration;
                               * result will then be truncated to BUFSZ-1 */
 
-static void putmesg(const char *);
-static char *You_buf(int);
+staticfn void putmesg(const char *);
+staticfn char *You_buf(int);
 #if defined(MSGHANDLER)
-static void execplinehandler(const char *);
+staticfn void execplinehandler(const char *);
 #endif
 #ifdef USER_SOUNDS
 extern void maybe_play_sound(const char *);
 #endif
-#ifdef DUMPLOG
+#ifdef DUMPLOG_CORE
 
 /* keep the most recent DUMPLOG_MSG_COUNT messages */
 void
@@ -63,7 +63,7 @@ dumplogfreemessages(void)
 #endif
 
 /* keeps windowprocs usage out of pline() */
-static void
+staticfn void
 putmesg(const char *line)
 {
     int attr = ATR_NONE;
@@ -78,7 +78,7 @@ putmesg(const char *line)
     SoundSpeak(line);
 }
 
-static void vpline(const char *, va_list);
+staticfn void vpline(const char *, va_list);
 
 DISABLE_WARNING_FORMAT_NONLITERAL
 
@@ -92,14 +92,54 @@ pline(const char *line, ...)
     va_end(the_args);
 }
 
-static void
+void
+pline_dir(int dir, const char *line, ...)
+{
+    va_list the_args;
+
+    set_msg_dir(dir);
+
+    va_start(the_args, line);
+    vpline(line, the_args);
+    va_end(the_args);
+}
+
+void
+pline_xy(coordxy x, coordxy y, const char *line, ...)
+{
+    va_list the_args;
+
+    set_msg_xy(x, y);
+
+    va_start(the_args, line);
+    vpline(line, the_args);
+    va_end(the_args);
+}
+
+/* set the direction where next message happens */
+void
+set_msg_dir(int dir)
+{
+    dtoxy(&a11y.msg_loc, dir);
+    a11y.msg_loc.x += u.ux;
+    a11y.msg_loc.y += u.uy;
+}
+
+/* set the coordinate where next message happens */
+void
+set_msg_xy(coordxy x, coordxy y)
+{
+    a11y.msg_loc.x = x;
+    a11y.msg_loc.y = y;
+}
+
+staticfn void
 vpline(const char *line, va_list the_args)
 {
     static int in_pline = 0;
     char pbuf[BIGBUFSZ]; /* will get chopped down to BUFSZ-1 if longer */
     int ln;
     int msgtyp;
-    int vlen = 0;
     boolean no_repeat;
 
     if (!line || !*line)
@@ -111,24 +151,51 @@ vpline(const char *line, va_list the_args)
     if (gp.program_state.wizkit_wishing)
         return;
 
-    if (strchr(line, '%')) {
-        vlen = vsnprintf(pbuf, sizeof(pbuf), line, the_args);
-#if (NH_DEVEL_STATUS != NH_STATUS_RELEASED) && defined(DEBUG)
-        if (vlen >= (int) sizeof pbuf)
-            panic("%s: truncation of buffer at %zu of %d bytes",
-                  "pline", sizeof pbuf, vlen);
-#else
-        nhUse(vlen);
-#endif
-        line = pbuf;
+    if (a11y.accessiblemsg && isok(a11y.msg_loc.x,a11y.msg_loc.y)) {
+        char *tmp;
+        char *dirstr;
+        static char dirstrbuf[BUFSZ];
+        int g = (iflags.getpos_coords == GPCOORDS_NONE)
+            ? GPCOORDS_COMFULL : iflags.getpos_coords;
+
+        dirstr = coord_desc(a11y.msg_loc.x, a11y.msg_loc.y, dirstrbuf, g);
+        a11y.msg_loc.x = a11y.msg_loc.y = 0;
+        tmp = (char *)alloc(strlen(line) + sizeof ": " + strlen(dirstr));
+        Strcpy(tmp, dirstr);
+        Strcat(tmp, ": ");
+        Strcat(tmp, line);
+        vpline(tmp, the_args);
+        free((genericptr_t) tmp);
+        return;
     }
-    if ((ln = (int) strlen(line)) > BUFSZ - 1) {
-        if (line != pbuf)                          /* no '%' was present */
-            (void) strncpy(pbuf, line, BUFSZ - 1); /* caveat: unterminated */
-        /* truncate, preserving the final 3 characters:
-           "___ extremely long text" -> "___ extremely l...ext"
+
+    if (!strchr(line, '%')) {
+        /* format does not specify any substitutions; use it as-is */
+        ln = (int) strlen(line);
+    } else if (line[0] == '%' && line[1] == 's' && !line[2]) {
+        /* "%s" => single string; skip format and use its first argument;
+           unlike with the format, it is irrelevant whether the argument
+           contains any percent signs */
+        line = va_arg(the_args, const char *); /*VA_NEXT(line,const char *);*/
+        ln = (int) strlen(line);
+    } else {
+        /* perform printf() formatting */
+        ln = vsnprintf(pbuf, sizeof pbuf, line, the_args);
+        line = pbuf;
+        /* note: 'ln' is number of characters attempted, not necessarily
+           strlen(line); that matters for the overflow check; if we avoid
+           the extremely-too-long panic then 'ln' will be actual length */
+    }
+    if (ln > (int) sizeof pbuf - 1) /* extremely too long */
+        panic("pline attempting to print %d characters!", ln);
+
+    if (ln > BUFSZ - 1) {
+        /* too long but modestly so; allow but truncate, preserving final
+           3 chars: "___ extremely long text" -> "___ extremely l...ext"
            (this may be suboptimal if overflow is less than 3) */
-        memcpy(pbuf + BUFSZ - 1 - 6, "...", 3);
+        if (line != pbuf) /* no '%' was present or format was just "%s" */
+            (void) strncpy(pbuf, line, BUFSZ - 1); /* caveat: unterminated */
+        pbuf[BUFSZ - 1 - 6] = pbuf[BUFSZ - 1 - 5] = pbuf[BUFSZ - 1 - 4] = '.';
         /* avoid strncpy; buffers could overlap if excess is small */
         pbuf[BUFSZ - 1 - 3] = line[ln - 3];
         pbuf[BUFSZ - 1 - 2] = line[ln - 2];
@@ -138,7 +205,7 @@ vpline(const char *line, va_list the_args)
     }
     msgtyp = MSGTYP_NORMAL;
 
-#ifdef DUMPLOG
+#ifdef DUMPLOG_CORE
     /* We hook here early to have options-agnostic output.
      * Unfortunately, that means Norep() isn't honored (general issue) and
      * that short lines aren't combined into one longer one (tty behavior).
@@ -179,7 +246,7 @@ vpline(const char *line, va_list the_args)
     if (gv.vision_full_recalc)
         vision_recalc(0);
     if (u.ux)
-        flush_screen(1); /* %% */
+        flush_screen((gp.pline_flags & NO_CURS_ON_U) ? 0 : 1); /* %% */
 
     putmesg(line);
 
@@ -245,7 +312,7 @@ Norep(const char *line, ...)
     va_end(the_args);
 }
 
-static char *
+staticfn char *
 You_buf(int siz)
 {
     if (siz > gy.you_buf_siz) {
@@ -453,7 +520,7 @@ livelog_printf(
 
 #endif /* !CHRONICLE */
 
-static void vraw_printf(const char *, va_list);
+staticfn void vraw_printf(const char *, va_list);
 
 void
 raw_printf(const char *line, ...)
@@ -469,7 +536,7 @@ raw_printf(const char *line, ...)
 
 DISABLE_WARNING_FORMAT_NONLITERAL
 
-static void
+staticfn void
 vraw_printf(const char *line, va_list the_args)
 {
     char pbuf[BIGBUFSZ]; /* will be chopped down to BUFSZ-1 if longer */
@@ -497,28 +564,44 @@ impossible(const char *s, ...)
 {
     va_list the_args;
     char pbuf[BIGBUFSZ]; /* will be chopped down to BUFSZ-1 if longer */
+    char pbuf2[BUFSZ];
 
     va_start(the_args, s);
     if (gp.program_state.in_impossible)
         panic("impossible called impossible");
 
     gp.program_state.in_impossible = 1;
-    (void) vsnprintf(pbuf, sizeof(pbuf), s, the_args);
+    (void) vsnprintf(pbuf, sizeof pbuf, s, the_args);
     va_end(the_args);
     pbuf[BUFSZ - 1] = '\0'; /* sanity */
     paniclog("impossible", pbuf);
     if (iflags.debug_fuzzer)
         panic("%s", pbuf);
+
+    gp.pline_flags = URGENT_MESSAGE;
     pline("%s", pbuf);
-    /* reuse pbuf[] */
-    Strcpy(pbuf, "Program in disorder!");
+    gp.pline_flags = 0;
+
+    Strcpy(pbuf2, "Program in disorder!");
     if (gp.program_state.something_worth_saving)
-        Strcat(pbuf, "  (Saving and reloading may fix this problem.)");
-    pline("%s", pbuf);
+        Strcat(pbuf2, "  (Saving and reloading may fix this problem.)");
+    pline("%s", pbuf2);
     pline("Please report these messages to %s.", DEVTEAM_EMAIL);
     if (sysopt.support) {
         pline("Alternatively, contact local support: %s", sysopt.support);
     }
+
+#ifdef CRASHREPORT
+    if (sysopt.crashreporturl) {
+        boolean report = ('y' == yn_function("Report now?", ynchars,
+                                             'n', FALSE));
+
+        raw_print("");  // prove to the user the character was accepted
+        if (report) {
+            submit_web_report(1, "Impossible", pbuf);
+        }
+    }
+#endif
 
     gp.program_state.in_impossible = 0;
 }
@@ -528,7 +611,7 @@ RESTORE_WARNING_FORMAT_NONLITERAL
 #if defined(MSGHANDLER)
 static boolean use_pline_handler = TRUE;
 
-static void
+staticfn void
 execplinehandler(const char *line)
 {
 #if defined(POSIX_TYPES) || defined(__GNUC__)
@@ -583,7 +666,7 @@ execplinehandler(const char *line)
 /*
  * varargs handling for files.c
  */
-static void vconfig_error_add(const char *, va_list);
+staticfn void vconfig_error_add(const char *, va_list);
 
 DISABLE_WARNING_FORMAT_NONLITERAL
 
@@ -597,7 +680,7 @@ config_error_add(const char *str, ...)
     va_end(the_args);
 }
 
-static void
+staticfn void
 vconfig_error_add(const char *str, va_list the_args)
 {       /* start of vconf...() or of nested block in USE_OLDARG's conf...() */
     int vlen = 0;

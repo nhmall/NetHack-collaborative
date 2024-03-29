@@ -12,10 +12,6 @@
 
 #include <ctype.h>
 
-#ifndef A_ITALIC
-#define A_ITALIC A_UNDERLINE
-#endif
-
 /* Misc. curses interface functions */
 
 /* Private declarations */
@@ -23,20 +19,18 @@
 static int curs_x = -1;
 static int curs_y = -1;
 
-static boolean modifiers_available =
-#if defined(PDCURSES) && defined(PDC_KEY_MODIFIER_ALT)
-    TRUE;
-#else
-    FALSE;
-#endif
-
 #if defined(PDCURSES) && defined(PDC_KEY_MODIFIER_ALT)
 static unsigned long last_getch_modifiers = 0L;
+static boolean modifiers_available = TRUE;
+#else
+static boolean modifiers_available = FALSE;
 #endif
 
 static int modified(int ch);
 static void update_modifiers(void);
-static int parse_escape_sequence(void);
+static int parse_escape_sequence(int, boolean *);
+
+#define SS3 M(C('O')) /* 8-bit escape sequence initiator for VT number pad */
 
 int
 curses_getch(void)
@@ -67,13 +61,6 @@ curses_read_char(void)
         ch = '\033'; /* map NUL to ESC since nethack doesn't expect NUL */
     }
 
-#ifdef KEY_RESIZE
-    /* Handle resize events via get_nh_event, not this code */
-    if (ch == KEY_RESIZE) {
-        ch = C('r'); /* NetHack doesn't know what to do with KEY_RESIZE */
-    }
-#endif
-
     if (counting && !isdigit(ch)) { /* dismiss count window if necessary */
         curses_count_window(NULL);
         curses_refresh_nethack_windows();
@@ -87,15 +74,17 @@ curses_read_char(void)
 void
 curses_toggle_color_attr(WINDOW *win, int color, int attr, int onoff)
 {
-#ifdef TEXTCOLOR
+    if (color == NO_COLOR)
+        color = NONE;
+
     int curses_color;
+    boolean use_bold = FALSE;
 
     /* if color is disabled, just show attribute */
     if ((win == mapwin) ? !iflags.wc_color
                         /* statuswin is for #if STATUS_HILITES
                            but doesn't need to be conditional */
                         : !(iflags.wc2_guicolor || win == statuswin)) {
-#endif
         if (attr != NONE) {
             if (onoff == ON)
                 wattron(win, attr);
@@ -103,10 +92,9 @@ curses_toggle_color_attr(WINDOW *win, int color, int attr, int onoff)
                 wattroff(win, attr);
         }
         return;
-#ifdef TEXTCOLOR
     }
 
-    if (color == 0) {           /* make black fg visible */
+    if (color == CLR_BLACK) {           /* make black fg visible */
 # ifdef USE_DARKGRAY
         if (iflags.wc2_darkgray) {
             if (COLORS > 16) {
@@ -118,17 +106,23 @@ curses_toggle_color_attr(WINDOW *win, int color, int attr, int onoff)
 # endif/* USE_DARKGRAY */
             color = CLR_BLUE;
     }
-    curses_color = color + 1;
+
     if (COLORS < 16) {
-        if (curses_color > 8 && curses_color < 17)
-            curses_color -= 8;
-        else if (curses_color > (17 + 16))
-            curses_color -= 16;
+        /* convert NetHack's 16 colors to 8 colors + BOLD */
+        int fg = color % 16;
+        int bg = color / 16;
+
+        if (fg > 7)
+            use_bold = TRUE;
+
+        curses_color = (8 * (bg % 8)) + (fg % 8) + 1;
+    } else {
+        curses_color = color + 1;
     }
+
     if (onoff == ON) {          /* Turn on color/attributes */
         if (color != NONE) {
-            if ((((color > 7) && (color < 17)) ||
-                 (color > 17 + 17)) && (COLORS < 16)) {
+            if (use_bold) {
                 wattron(win, A_BOLD);
             }
             wattron(win, COLOR_PAIR(curses_color));
@@ -140,7 +134,7 @@ curses_toggle_color_attr(WINDOW *win, int color, int attr, int onoff)
     } else {                    /* Turn off color/attributes */
 
         if (color != NONE) {
-            if ((color > 7) && (COLORS < 16)) {
+            if (use_bold) {
                 wattroff(win, A_BOLD);
             }
 # ifdef USE_DARKGRAY
@@ -159,9 +153,6 @@ curses_toggle_color_attr(WINDOW *win, int color, int attr, int onoff)
             wattroff(win, attr);
         }
     }
-#else
-    nhUse(color);
-#endif /* TEXTCOLOR */
 }
 
 /* call curses_toggle_color_attr() with 'menucolors' instead of 'guicolor'
@@ -175,7 +166,8 @@ curses_menu_color_attr(WINDOW *win, int color, int attr, int onoff)
     /* curses_toggle_color_attr() uses 'guicolor' to decide whether to
        honor specified color, but menu windows have their own
        more-specific control, 'menucolors', so override with that here */
-    iflags.wc2_guicolor = iflags.use_menu_color;
+/*    iflags.wc2_guicolor = iflags.use_menu_color; */
+    iflags.wc2_guicolor = (color != NONE);
     curses_toggle_color_attr(win, color, attr, onoff);
     iflags.wc2_guicolor = save_guicolor;
 }
@@ -408,6 +400,7 @@ curses_str_remainder(const char *str, int width, int line_num)
         if (last_space == 0) {  /* No spaces found */
             last_space = count - 1;
         }
+        assert(IndexOk(last_space, substr));
         if (substr[last_space] == '\0') {
             break;
         }
@@ -616,6 +609,17 @@ curses_move_cursor(winid wid, int x, int y)
     }
 }
 
+/* update the ncurses stdscr cursor to where the cursor in our map is */
+void
+curses_update_stdscr_cursor(void)
+{
+#ifndef PDCURSES
+    int xadj = 0, yadj = 0;
+
+    curses_get_window_xy(MAP_WIN, &xadj, &yadj);
+    move(curs_y + yadj, curs_x + xadj);
+#endif
+}
 
 /* Perform actions that should be done every turn before nhgetch() */
 
@@ -659,7 +663,7 @@ curses_view_file(const char *filename, boolean must_exist)
     char buf[BUFSZ];
     menu_item *selected = NULL;
     dlb *fp = dlb_fopen(filename, "r");
-    int clr = 0;
+    int clr = NO_COLOR;
 
     if (fp == NULL) {
         if (must_exist)
@@ -712,11 +716,11 @@ curses_get_count(int first_digit)
        curses's message window will display that in count window instead */
     current_char = get_count(NULL, (char) first_digit,
                              /* 0L => no limit on value unless it wraps
-                                to negative */
+                              * to negative */
                              0L, &current_count,
-                             /* default: don't put into message history,
-                                don't echo until second digit entered */
-                             GC_NOFLAGS);
+                             /* don't put into message history, echo full
+                              * number rather than waiting until 2nd digit */
+                             GC_ECHOFIRST);
 
     ungetch(current_char);
     if (current_char == '\033') {     /* Cancelled with escape */
@@ -729,10 +733,10 @@ curses_get_count(int first_digit)
 /* Convert the given NetHack text attributes into the format curses
    understands, and return that format mask. */
 
-int
+attr_t
 curses_convert_attr(int attr)
 {
-    int curses_attr;
+    attr_t curses_attr;
 
     /* first, strip off control flags masked onto the display attributes
        (caller should have already done this...) */
@@ -767,109 +771,30 @@ curses_convert_attr(int attr)
     return curses_attr;
 }
 
-
-/* Map letter attributes from a string to bitmask.  Return mask on
-   success (might be 0), or -1 if not found. */
-
-int
-curses_read_attrs(const char *attrs)
-{
-    int retattr = 0;
-
-    if (!attrs || !*attrs)
-        return A_NORMAL;
-
-    if (strchr(attrs, 'b') || strchr(attrs, 'B'))
-        retattr |= A_BOLD;
-    if (strchr(attrs, 'i') || strchr(attrs, 'I')) /* inverse */
-        retattr |= A_REVERSE;
-    if (strchr(attrs, 'u') || strchr(attrs, 'U'))
-        retattr |= A_UNDERLINE;
-    if (strchr(attrs, 'k') || strchr(attrs, 'K'))
-        retattr |= A_BLINK;
-    if (strchr(attrs, 'd') || strchr(attrs, 'D'))
-        retattr |= A_DIM;
-#ifdef A_ITALIC
-    if (strchr(attrs, 't') || strchr(attrs, 'T'))
-        retattr |= A_ITALIC;
-#endif
-#ifdef A_LEFTLINE
-    if (strchr(attrs, 'l') || strchr(attrs, 'L'))
-        retattr |= A_LEFTLINE;
-#endif
-#ifdef A_RIGHTLINE
-    if (strchr(attrs, 'r') || strchr(attrs, 'R'))
-        retattr |= A_RIGHTLINE;
-#endif
-    if (retattr == 0) {
-        /* still default; check for none/normal */
-        if (strchr(attrs, 'n') || strchr(attrs, 'N'))
-            retattr = A_NORMAL;
-        else
-            retattr = -1; /* error */
-    }
-    return retattr;
-}
-
-/* format iflags.wc2_petattr into "+a+b..." for set bits a, b, ...
-   (used by core's 'O' command; return value points past leading '+') */
-char *
-curses_fmt_attrs(char *outbuf)
-{
-    int attr = iflags.wc2_petattr;
-
-    outbuf[0] = '\0';
-    if (attr == A_NORMAL) {
-        Strcpy(outbuf, "+N(None)");
-    } else {
-        if (attr & A_BOLD)
-            Strcat(outbuf, "+B(Bold)");
-        if (attr & A_REVERSE)
-            Strcat(outbuf, "+I(Inverse)");
-        if (attr & A_UNDERLINE)
-            Strcat(outbuf, "+U(Underline)");
-        if (attr & A_BLINK)
-            Strcat(outbuf, "+K(blinK)");
-        if (attr & A_DIM)
-            Strcat(outbuf, "+D(Dim)");
-#ifdef A_ITALIC
-        if (attr & A_ITALIC)
-            Strcat(outbuf, "+T(iTalic)");
-#endif
-#ifdef A_LEFTLINE
-        if (attr & A_LEFTLINE)
-            Strcat(outbuf, "+L(Left line)");
-#endif
-#ifdef A_RIGHTLINE
-        if (attr & A_RIGHTLINE)
-            Strcat(outbuf, "+R(Right line)");
-#endif
-    }
-    if (!*outbuf)
-        Sprintf(outbuf, "+unknown [%d]", attr);
-    return &outbuf[1];
-}
-
 /* Convert special keys into values that NetHack can understand.
 Currently this is limited to arrow keys, but this may be expanded. */
-
 int
 curses_convert_keys(int key)
 {
-    boolean reject = !gp.program_state.getting_a_command,
-            as_is = FALSE;
+    boolean reject = (gp.program_state.input_state == otherInp),
+            as_is = FALSE, numpad_esc = FALSE;
     int ret = key;
 
     if (modifiers_available)
         update_modifiers();
 
-    if (ret == '\033') {
-        ret = parse_escape_sequence();
-    }
-
     /* Handle arrow and keypad keys, but only when getting a command
        (or a command-like keystroke for getpos() or getdir()). */
     switch (key) {
+    case SS3: /* M-^O, 8-bit version of ESC 'O' c for keypad key */
+    case '\033': /* ESC or ^[ */
+        /* changes ESC c to M-c or number pad key to corresponding digit
+           (but we only get here via key==ESC if curses' getch() didn't
+           change the latter to KEY_xyz) */
+        ret = parse_escape_sequence(key, &numpad_esc);
+        reject = ((uchar) ret < 1 || ret > 255);
+        as_is = !numpad_esc; /* don't perform phonepad inversion */
+        break;
     case KEY_BACKSPACE:
         /* we can't distinguish between a separate backspace key and
            explicit Ctrl+H intended to rush to the left; without this,
@@ -953,6 +878,13 @@ curses_convert_keys(int key)
         ret = iflags.num_pad ? '5' : 'g';
         break;
 #endif /* KEY_B2 */
+#ifdef KEY_RESIZE
+    case KEY_RESIZE:
+        /* actual resize is handled elsewhere; just avoid beep/bell here */
+        ret = '\033'; /* was C('R'); -- nethack's redraw command */
+        reject = FALSE;
+        break;
+#endif
     }
 
     /* phone layout is inverted, 123 on top and 789 on bottom; if player has
@@ -967,9 +899,9 @@ curses_convert_keys(int key)
 
     if (reject) {
         /* an arrow or function key has been pressed during text entry */
-        beep();   /* not curses_nhbell() because it might end up getting
-                   * changed to deliver a sound effect */
-        ret = 0;  /* this ends up behaving like <escape> */
+        curses_nhbell(); /* calls beep() which might cause unwanted screen
+                          * refresh if terminal is set for 'visible bell' */
+        ret = '\033'; /* ESC */
     }
 
     return ret;
@@ -1057,45 +989,81 @@ curses_mouse_support(int mode) /* 0: off, 1: on, 2: alternate on */
 #endif
 }
 
-/* caller just got an input character of ESC;
+/* caller just got an input character of ESC or M-^O;
    note: curses converts a lot of escape sequences to single values greater
    than 255 and those won't look like ESC to caller so won't get here */
 static int
-parse_escape_sequence(void)
+parse_escape_sequence(int key, boolean *keypadnum)
 {
 #ifndef PDCURSES
-    int ret;
+    int ret, keypadother = 0;
+
+    *keypadnum = FALSE;
 
     timeout(10);
-
     ret = getch();
 
-    if (ret == 'O') {               /* Numeric keypad */
-        /* ESC O <something> */
-        ret = getch();
-        if (ret >= 112 && ret <= 121) {
-            timeout(-1);
-            return ret - 112 + '0'; /* Convert to number */
-        }
+    if (ret == 'O' || key == SS3) { /* handle numeric keypad */
+        /*
+         * ESC O <pending> or M-^O <something|nothing>.
+         *
+         * For the former, we don't have the next char yet so get it now.
+         * If there isn't one, treat ESC O as if user typed M-O (which
+         * is probably the case, via alt+shift+O combo sending two char
+         * "ESC O").
+         *
+         * For the latter, it there wasn't another char then 'ret' will
+         * be ERR and we'll treat the result as M-^O.  However, if there
+         * is another char and it is O meant as two characters "M-^O O"
+         * we'll be fooled, but that's not a valid escape sequence so
+         * don't worry about those two characters arriving together.
+         */
+        if (key == '\033')
+            ret = getch();
 
-        if (ret == ERR)
-            ret = 'O'; /* there was no third char; treat as ESC O below */
+        if (ret == ERR) {
+            /* there was no additional char; treat as M-O or M-^O below */
+            ret = (key == '\033') ? 'O' : C('O');
+        } else if (ret >= 112 && ret <= 121) { /* 'p'..'y' */
+            *keypadnum = TRUE; /* convert 'p'..'y' to '0'..'9' below */
+        } else if (ret >= 108 && ret <= 110) { /* 'l'..'n' */
+            keypadother = 1;   /* convert 'l','m','n' to ',','.','-' below */
+        } else if (ret == 'M') {
+            keypadother = 2;   /* convert "ESC O M" or "SS3 M" to ^M */
+        }
     }
 
-    if (ret != ERR && ret <= 255) {
+    timeout(-1); /* reset to 'wait unlimited time for next input' */
+
+    if (*keypadnum) {
+        /* 'p' -> '0', ..., 'y' -> '9' */
+        ret -= ('p' - '0');         /* Convert c from 'ESC O c' to digit */
+    } else if (keypadother > 0) {
+        /* conversion for VT keypad keys (no plus; ignore PF1 through PF4)
+           [typical PC keyboard has period and plus, no comma or minus] */
+        if (keypadother == 1)
+            ret -= ('l' - ',');     /* keypad comma, period, or minus */
+        else
+            ret = C('M');           /* keypad <enter> */
+    } else if (ret != ERR && ret <= 255) {
         /* ESC <something>; effectively 'altmeta' behind player's back */
         ret = M(ret);               /* Meta key support for most terminals */
     } else {
         ret = '\033';               /* Just an escape character */
     }
 
-    timeout(-1);
-
     return ret;
 #else
+    nhUse(key);
+    nhUse(keypadnum);
     return '\033';
 #endif /* !PDCURSES */
 }
+
+#undef SS3
+
+/* update_modifiers() and modified() will never be
+   called if modifiers_available is FALSE */
 
 static void
 update_modifiers(void)
@@ -1105,7 +1073,6 @@ update_modifiers(void)
 #endif
 }
 
-/* This will never be called if modifiers_available is FALSE */
 static int
 modified(int ch)
 {
@@ -1130,3 +1097,5 @@ modified(int ch)
 #endif
     return ret_ch;
 }
+
+/*cursmisc.c*/

@@ -1,4 +1,4 @@
-/* NetHack 3.7	allmain.c	$NHDT-Date: 1652831519 2022/05/17 23:51:59 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.185 $ */
+/* NetHack 3.7	allmain.c	$NHDT-Date: 1704225560 2024/01/02 19:59:20 $  $NHDT-Branch: keni-luabits2 $:$NHDT-Revision: 1.238 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2012. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -12,23 +12,34 @@
 #include <signal.h>
 #endif
 
-static void moveloop_preamble(boolean);
-static void u_calc_moveamt(int);
-static void maybe_do_tutorial(void);
+staticfn void moveloop_preamble(boolean);
+staticfn void u_calc_moveamt(int);
+staticfn void maybe_do_tutorial(void);
 #ifdef POSITIONBAR
-static void do_positionbar(void);
+staticfn void do_positionbar(void);
 #endif
-static void regen_pw(int);
-static void regen_hp(int);
-static void interrupt_multi(const char *);
-static void debug_fields(const char *);
+staticfn void regen_pw(int);
+staticfn void regen_hp(int);
+staticfn void interrupt_multi(const char *);
+staticfn void debug_fields(const char *);
 #ifndef NODUMPENUMS
-static void dump_enums(void);
+staticfn void dump_enums(void);
 #endif
 
+#ifdef CRASHREPORT
+#define USED_FOR_CRASHREPORT
+#else
+#define USED_FOR_CRASHREPORT UNUSED
+#endif
+
+/*ARGSUSED*/
 void
-early_init(void)
+early_init(int argc USED_FOR_CRASHREPORT, char *argv[] USED_FOR_CRASHREPORT)
 {
+#ifdef CRASHREPORT
+    /* Do this as early as possible, but let ports do other things first. */
+    crashreport_init(argc, argv);
+#endif
     decl_globals_init();
     objects_globals_init();
     monst_globals_init();
@@ -36,7 +47,7 @@ early_init(void)
     runtime_info_init();
 }
 
-static void
+staticfn void
 moveloop_preamble(boolean resuming)
 {
     /* if a save file created in normal mode is now being restored in
@@ -60,6 +71,7 @@ moveloop_preamble(boolean resuming)
     }
 
     if (!resuming) { /* new game */
+        gp.program_state.beyond_savefile_load = 1; /* for TTY_PERM_INVENT */
         gc.context.rndencode = rnd(9000);
         set_wear((struct obj *) 0); /* for side-effects of starting gear */
         reset_justpicked(gi.invent);
@@ -68,8 +80,12 @@ moveloop_preamble(boolean resuming)
            clairvoyance (wizard with cornuthaum perhaps?); without this,
            first "random" occurrence would always kick in on turn 1 */
         gc.context.seer_turn = (long) rnd(30);
+        /* give hero initial movement points; new game only--for restore,
+           pending movement points were included in the save file */
+        u.umovement = NORMAL_SPEED;
+        initrack();
     }
-    gc.context.botlx = TRUE; /* for STATUS_HILITES */
+    disp.botlx = TRUE; /* for STATUS_HILITES */
     if (resuming) { /* restoring old game */
         read_engr_at(u.ux, u.uy); /* subset of pickup() */
         fix_shop_damage();
@@ -80,10 +96,8 @@ moveloop_preamble(boolean resuming)
         gd.defer_see_monsters = FALSE;
         see_monsters();
     }
-    initrack();
 
     u.uz0.dlevel = u.uz.dlevel;
-    gy.youmonst.movement = NORMAL_SPEED; /* give hero some movement points */
     gc.context.move = 0;
 
     gp.program_state.in_moveloop = 1;
@@ -93,7 +107,7 @@ moveloop_preamble(boolean resuming)
         update_inventory();
 }
 
-static void
+staticfn void
 u_calc_moveamt(int wtcap)
 {
     int moveamt = 0;
@@ -135,9 +149,9 @@ u_calc_moveamt(int wtcap)
         break;
     }
 
-    gy.youmonst.movement += moveamt;
-    if (gy.youmonst.movement < 0)
-        gy.youmonst.movement = 0;
+    u.umovement += moveamt;
+    if (u.umovement < 0)
+        u.umovement = 0;
 }
 
 #if defined(MICRO) || defined(WIN32)
@@ -168,7 +182,7 @@ moveloop_core(void)
 
     if (gc.context.move) {
         /* actual time passed */
-        gy.youmonst.movement -= NORMAL_SPEED;
+        u.umovement -= NORMAL_SPEED;
 
         do { /* hero can't move this turn loop */
             mvl_wtcap = encumber_msg();
@@ -176,12 +190,12 @@ moveloop_core(void)
             gc.context.mon_moving = TRUE;
             do {
                 monscanmove = movemon();
-                if (gy.youmonst.movement >= NORMAL_SPEED)
+                if (u.umovement >= NORMAL_SPEED)
                     break; /* it's now your turn */
             } while (monscanmove);
             gc.context.mon_moving = FALSE;
 
-            if (!monscanmove && gy.youmonst.movement < NORMAL_SPEED) {
+            if (!monscanmove && u.umovement < NORMAL_SPEED) {
                 /* both hero and monsters are out of steam this round */
                 struct monst *mtmp;
 
@@ -225,7 +239,7 @@ moveloop_core(void)
                 gh.hero_seq = gm.moves << 3;
 
                 if (flags.time && !gc.context.run)
-                    iflags.time_botl = TRUE; /* 'moves' just changed */
+                    disp.time_botl = TRUE; /* 'moves' just changed */
 
                 /********************************/
                 /* once-per-turn things go here */
@@ -289,7 +303,7 @@ moveloop_core(void)
                         mvl_change = 0;
                     if (Polymorph && !rn2(100))
                         mvl_change = 1;
-                    else if (u.ulycn >= LOW_PM && !Upolyd
+                    else if (ismnum(u.ulycn) && !Upolyd
                              && !rn2(80 - (20 * night())))
                         mvl_change = 2;
                     if (mvl_change && !Unchanging) {
@@ -333,7 +347,7 @@ moveloop_core(void)
                 /* vision will be updated as bubbles move */
                 if (Is_waterlevel(&u.uz) || Is_airlevel(&u.uz))
                     movebubbles();
-                else if (Is_firelevel(&u.uz))
+                else if (gl.level.flags.fumaroles)
                     fumaroles();
 
                 /* when immobile, count is in turns */
@@ -347,7 +361,7 @@ moveloop_core(void)
                     }
                 }
             }
-        } while (gy.youmonst.movement < NORMAL_SPEED); /* hero can't move */
+        } while (u.umovement < NORMAL_SPEED); /* hero can't move */
 
         /******************************************/
         /* once-per-hero-took-time things go here */
@@ -355,7 +369,7 @@ moveloop_core(void)
 
         gh.hero_seq++; /* moves*8 + n for n == 1..7 */
 
-        /* although we checked for encumberance above, we need to
+        /* although we checked for encumbrance above, we need to
            check again for message purposes, as the weight of
            inventory may have changed in, e.g., nh_timeout(); we do
            need two checks here so that the player gets feedback
@@ -417,10 +431,10 @@ moveloop_core(void)
         if (gv.vision_full_recalc)
             vision_recalc(0); /* vision! */
     }
-    if (gc.context.botl || gc.context.botlx) {
+    if (disp.botl || disp.botlx) {
         bot();
         curs_on_u();
-    } else if (iflags.time_botl) {
+    } else if (disp.time_botl) {
         timebot();
         curs_on_u();
     }
@@ -477,13 +491,13 @@ moveloop_core(void)
         } else {
             --gm.multi;
             nhassert(gc.command_count != 0);
-            rhack(gc.command_line);
+            rhack(gc.cmd_key);
         }
     } else if (gm.multi == 0) {
 #ifdef MAIL
         ckmailstatus();
 #endif
-        rhack((char *) 0);
+        rhack(0);
     }
     if (u.utotype)       /* change dungeon level */
         deferred_goto(); /* after rhack() */
@@ -495,7 +509,7 @@ moveloop_core(void)
         && (gm.multi && (!gc.context.travel ? !(gm.multi % 7)
                         : !(gm.moves % 7L)))) {
         if (flags.time && gc.context.run)
-            gc.context.botl = TRUE;
+            disp.botl = TRUE;
         /* [should this be flush_screen() instead?] */
         display_nhwindow(WIN_MAP, FALSE);
     }
@@ -503,11 +517,12 @@ moveloop_core(void)
     if (gl.luacore && nhcb_counts[NHCB_END_TURN]) {
         lua_getglobal(gl.luacore, "nh_callback_run");
         lua_pushstring(gl.luacore, nhcb_name[NHCB_END_TURN]);
-        nhl_pcall(gl.luacore, 1, 0);
+        nhl_pcall_handle(gl.luacore, 1, 0, "moveloop_core", NHLpa_panic);
+        lua_settop(gl.luacore, 0);
     }
 }
 
-static void
+staticfn void
 maybe_do_tutorial(void)
 {
     s_level *sp = find_level("tut-1");
@@ -517,12 +532,13 @@ maybe_do_tutorial(void)
 
     if (ask_do_tutorial()) {
         assign_level(&u.ucamefrom, &u.uz);
-        u.nofollowers = TRUE;
-        schedule_goto(&sp->dlevel, UTOTYPE_NONE, (char *) 0, (char *) 0);
+        iflags.nofollowers = TRUE;
+        schedule_goto(&sp->dlevel, UTOTYPE_NONE,
+                      "Entering the tutorial.", (char *) 0);
         deferred_goto();
         vision_recalc(0);
         docrt();
-        u.nofollowers = FALSE;
+        iflags.nofollowers = FALSE;
     }
 }
 
@@ -539,7 +555,7 @@ moveloop(boolean resuming)
     }
 }
 
-static void
+staticfn void
 regen_pw(int wtcap)
 {
     if (u.uen < u.uenmax
@@ -552,7 +568,7 @@ regen_pw(int wtcap)
         u.uen += rn1(upper, 1);
         if (u.uen > u.uenmax)
             u.uen = u.uenmax;
-        gc.context.botl = TRUE;
+        disp.botl = TRUE;
         if (u.uen == u.uenmax)
             interrupt_multi("You feel full of energy.");
     }
@@ -561,7 +577,7 @@ regen_pw(int wtcap)
 #define U_CAN_REGEN() (Regeneration || (Sleepy && u.usleep))
 
 /* maybe recover some lost health (or lose some when an eel out of water) */
-static void
+staticfn void
 regen_hp(int wtcap)
 {
     int heal = 0;
@@ -584,7 +600,7 @@ regen_hp(int wtcap)
                 heal = 1;
         }
         if (heal) {
-            gc.context.botl = TRUE;
+            disp.botl = TRUE;
             u.mh += heal;
             reached_full = (u.mh == u.mhmax);
         }
@@ -596,29 +612,15 @@ regen_hp(int wtcap)
            once u.mh reached u.mhmax; that may have been convenient
            for the player, but it didn't make sense for gameplay...] */
         if (u.uhp < u.uhpmax && (encumbrance_ok || U_CAN_REGEN())) {
-            if (u.ulevel > 9) {
-                if (!(gm.moves % 3L)) {
-                    int Con = (int) ACURR(A_CON);
+            heal = (u.ulevel + (int)ACURR(A_CON)) > rn2(100);
 
-                    if (Con <= 12) {
-                        heal = 1;
-                    } else {
-                        heal = rnd(Con);
-                        if (heal > u.ulevel - 9)
-                            heal = u.ulevel - 9;
-                    }
-                }
-            } else { /* u.ulevel <= 9 */
-                if (!(gm.moves % (long) ((MAXULEV + 12) / (u.ulevel + 2) + 1)))
-                    heal = 1;
-            }
-            if (U_CAN_REGEN() && !heal)
-                heal = 1;
+            if (U_CAN_REGEN())
+                heal += 1;
             if (Sleepy && u.usleep)
                 heal++;
 
             if (heal) {
-                gc.context.botl = TRUE;
+                disp.botl = TRUE;
                 u.uhp += heal;
                 if (u.uhp > u.uhpmax)
                     u.uhp = u.uhpmax;
@@ -640,8 +642,8 @@ stop_occupation(void)
     if (go.occupation) {
         if (!maybe_finished_meal(TRUE))
             You("stop %s.", go.occtxt);
-        go.occupation = 0;
-        gc.context.botl = TRUE; /* in case u.uhs changed */
+        go.occupation = (int (*)(void)) 0;
+        disp.botl = TRUE; /* in case u.uhs changed */
         nomul(0);
     } else if (gm.multi >= 0) {
         nomul(0);
@@ -650,7 +652,7 @@ stop_occupation(void)
 }
 
 void
-init_sound_and_display_gamewindows(void)
+init_sound_disp_gamewindows(void)
 {
     int menu_behavior = MENU_BEHAVE_STANDARD;
 
@@ -671,6 +673,9 @@ init_sound_and_display_gamewindows(void)
     }
     WIN_MAP = create_nhwindow(NHW_MAP);
     WIN_INVEN = create_nhwindow(NHW_MENU);
+    if (WIN_INVEN != WIN_ERR)
+        adjust_menu_promptstyle(WIN_INVEN, &iflags.menu_headings);
+
 #ifdef TTY_PERM_INVENT
     if (WINDOWPORT(tty) && WIN_INVEN != WIN_ERR) {
         menu_behavior = MENU_BEHAVE_PERMINV;
@@ -683,7 +688,7 @@ init_sound_and_display_gamewindows(void)
 
 #ifdef MAC
     /* This _is_ the right place for this - maybe we will
-     * have to split init_sound_and_display_gamewindows into
+     * have to split init_sound_disp_gamewindows into
      * create_gamewindows and show_gamewindows to get rid of this ifdef...
      */
     if (!strcmp(windowprocs.name, "mac"))
@@ -707,7 +712,9 @@ newgame(void)
 {
     int i;
 
-    gc.context.botlx = TRUE;
+    /* make sure welcome messages are given before noticing monsters */
+    notice_mon_off();
+    disp.botlx = TRUE;
     gc.context.ident = 1;
     gc.context.warnlevel = 1;
     gc.context.next_attrib_check = 600L; /* arbitrary first setting */
@@ -767,6 +774,11 @@ newgame(void)
 
     /* Success! */
     welcome(TRUE);
+    notice_mon_on(); /* now we can notice monsters */
+    if (a11y.glyph_updates)
+        (void) dolookaround();
+    else
+        notice_all_mons(TRUE);
     return;
 }
 
@@ -817,32 +829,44 @@ welcome(boolean new_game) /* false => restoring an old game */
         livelog_printf(LL_ACHIEVE, "%s the%s entered the dungeon",
                        gp.plname, buf);
     } else {
-        /* if restroing in Gehennom, give same hot/smoky message as when
+        /* if restoring in Gehennom, give same hot/smoky message as when
            first entering it */
         hellish_smoke_mesg();
+        /* remind player of the level annotation, like in goto_level() */
+        print_level_annotation();
     }
 }
 
 #ifdef POSITIONBAR
-static void
+staticfn void
 do_positionbar(void)
 {
+    /* FIXME: this will break if any coordinate is too big for (char);
+       the sys/msdos/vid*.c code uses (unsigned char) which is less
+       vulnerable but not guaranteed to be able to hold coordxy values;
+       also, there doesn't appear to be any need for this to be static,
+       nor to contain pairs of (> or <) and x; it could just be a full
+       line of spaces and > or < characters with update_positionbar()
+       revised to reconstruct the x values for non-space characters */
     static char pbar[COLNO];
     char *p;
-    stairway *stway = gs.stairs;
+    stairway *stway;
+    coordxy x, y;
+    int glyph, symbol;
 
     p = pbar;
     /* TODO: use the same method as getpos() so objects don't cover stairs */
-    while (stway) {
-        int x = stway->sx;
-        int y = stway->sy;
-        int glyph = glyph_to_cmap(gl.level.locations[x][y].glyph);
+    /* FIXME: traversing 'stairs' list ignores mimics that pose as stairs */
+    for (stway = gs.stairs; stway; stway = stway->next) {
+        x = stway->sx;
+        y = stway->sy;
+        glyph = levl[x][y].glyph;
+        symbol = glyph_to_cmap(glyph);
 
-        if (is_cmap_stairs(glyph)) {
+        if (is_cmap_stairs(symbol)) {
             *p++ = (stway->up ? '<' : '>');
-            *p++ = stway->sx;
+            *p++ = (char) x;
         }
-        stway = stway->next;
      }
 
     /* hero location */
@@ -857,12 +881,12 @@ do_positionbar(void)
 }
 #endif
 
-static void
+staticfn void
 interrupt_multi(const char *msg)
 {
     if (gm.multi > 0 && !gc.context.travel && !gc.context.run) {
         nomul(0);
-        if (Verbose(0,interrupt_multi) && msg)
+        if (flags.verbose && msg)
             Norep("%s", msg);
     }
 }
@@ -883,15 +907,16 @@ interrupt_multi(const char *msg)
 static const struct early_opt earlyopts[] = {
     { ARG_DEBUG, "debug", 5, TRUE },
     { ARG_VERSION, "version", 4, TRUE },
-    { ARG_SHOWPATHS, "showpaths", 9, FALSE },
+    { ARG_SHOWPATHS, "showpaths", 8, FALSE },
 #ifndef NODUMPENUMS
     { ARG_DUMPENUMS, "dumpenums", 9, FALSE },
 #endif
-#ifdef ENHANCED_SYMBOLS
     { ARG_DUMPGLYPHIDS, "dumpglyphids", 12, FALSE },
-#endif
 #ifdef WIN32
     { ARG_WINDOWS, "windows", 4, TRUE },
+#endif
+#if defined(CRASHREPORT)
+    { ARG_BIDSHOW, "bidshow", 7, FALSE },
 #endif
 };
 
@@ -914,11 +939,12 @@ argcheck(int argc, char *argv[], enum earlyarg e_arg)
     const char *dashdash = "";
 
     for (idx = 0; idx < SIZE(earlyopts); idx++) {
-        if (earlyopts[idx].e == e_arg)
+        if (earlyopts[idx].e == e_arg){
             break;
+	}
     }
     if (idx >= SIZE(earlyopts) || argc < 1)
-        return FALSE;
+        return 0;
 
     for (i = 0; i < argc; ++i) {
         if (argv[i][0] != '-')
@@ -953,13 +979,25 @@ argcheck(int argc, char *argv[], enum earlyarg e_arg)
 
             if (extended_opt) {
                 extended_opt++;
+                    /* Deprecated in favor of "copy" - remove no later
+                       than  next major version */
                 if (match_optname(extended_opt, "paste", 5, FALSE)) {
                     insert_into_pastebuf = TRUE;
-                } else {
-                    raw_printf(
-                   "-%sversion can only be extended with -%sversion:paste.\n",
+                } else if (match_optname(extended_opt, "copy", 4, FALSE)) {
+                    insert_into_pastebuf = TRUE;
+                } else if (match_optname(extended_opt, "dump", 4, FALSE)) {
+                    /* version number plus enabled features and sanity
+                       values that the program compares against the same
+                       thing recorded in save and bones files to check
+                       whether they're being used compatibly */
+                    dump_version_info();
+                    return 2; /* done */
+                } else if (!match_optname(extended_opt, "show", 4, FALSE)) {
+                    raw_printf("-%sversion can only be extended with"
+                               " -%sversion:copy or :dump or :show.\n",
                                dashdash, dashdash);
-                    return TRUE;
+                    /* exit after we've reported bad command line argument */
+                    return 2;
                 }
             }
             early_version_info(insert_into_pastebuf);
@@ -972,9 +1010,12 @@ argcheck(int argc, char *argv[], enum earlyarg e_arg)
             dump_enums();
             return 2;
 #endif
-#ifdef ENHANCED_SYMBOLS
         case ARG_DUMPGLYPHIDS:
             dump_glyphids();
+            return 2;
+#ifdef CRASHREPORT
+        case ARG_BIDSHOW:
+            crashreport_bidshow();
             return 2;
 #endif
 #ifdef WIN32
@@ -989,7 +1030,7 @@ argcheck(int argc, char *argv[], enum earlyarg e_arg)
             break;
         }
     };
-    return FALSE;
+    return 0;
 }
 
 /*
@@ -1004,7 +1045,7 @@ argcheck(int argc, char *argv[], enum earlyarg e_arg)
  *                    optimization so that display output
  *                    can be debugged without buffering.
  */
-static void
+staticfn void
 debug_fields(const char *opts)
 {
     char *op;
@@ -1068,34 +1109,102 @@ timet_delta(time_t etim, time_t stim) /* end and start times */
     return (long) difftime(etim, stim);
 }
 
-#if !defined(NODUMPENUMS) || defined(ENHANCED_SYMBOLS)
+#if !defined(NODUMPENUMS)
 /* monsdump[] and objdump[] are also used in utf8map.c */
+
 #define DUMP_ENUMS
 struct enum_dump monsdump[] = {
 #include "monsters.h"
     { NUMMONS, "NUMMONS" },
+    { NON_PM, "NON_PM" },
+    { LOW_PM, "LOW_PM" },
+    { HIGH_PM, "HIGH_PM" },
+    { SPECIAL_PM, "SPECIAL_PM" }
 };
 struct enum_dump objdump[] = {
 #include "objects.h"
     { NUM_OBJECTS, "NUM_OBJECTS" },
 };
+
+#define DUMP_ENUMS_PCHAR
+static struct enum_dump defsym_cmap_dump[] = {
+#include "defsym.h"
+    { MAXPCHARS, "MAXPCHARS" },
+};
+#undef DUMP_ENUMS_PCHAR
+
+#define DUMP_ENUMS_MONSYMS
+static struct enum_dump defsym_mon_syms_dump[] = {
+#include "defsym.h"
+    { MAXMCLASSES, "MAXMCLASSES" },
+};
+#undef DUMP_ENUMS_MONSYMS
+
+#define DUMP_ENUMS_MONSYMS_DEFCHAR
+static struct enum_dump defsym_mon_defchars_dump[] = {
+#include "defsym.h"
+};
+#undef DUMP_ENUMS_MONSYMS_DEFCHAR
+
+#define DUMP_ENUMS_OBJCLASS_DEFCHARS
+static struct enum_dump objclass_defchars_dump[] = {
+#include "defsym.h"
+};
+#undef DUMP_ENUMS_OBJCLASS_DEFCHARS
+
+#define DUMP_ENUMS_OBJCLASS_CLASSES
+static struct enum_dump objclass_classes_dump[] = {
+#include "defsym.h"
+    { MAXOCLASSES, "MAXOCLASSES" },
+};
+#undef DUMP_ENUMS_OBJCLASS_CLASSES
+
+#define DUMP_ENUMS_OBJCLASS_SYMS
+static struct enum_dump objclass_syms_dump[] = {
+#include "defsym.h"
+};
+#undef DUMP_ENUMS_OBJCLASS_SYMS
+
+#define DUMP_ARTI_ENUM
+static struct enum_dump arti_enum_dump[] = {
+#include "artilist.h"
+    { AFTER_LAST_ARTIFACT, "AFTER_LAST_ARTIFACT" }
+};
+#undef DUMP_ARTI_ENUM
+
 #undef DUMP_ENUMS
 
+
 #ifndef NODUMPENUMS
-static void
+
+staticfn void
 dump_enums(void)
 {
     enum enum_dumps {
         monsters_enum,
         objects_enum,
         objects_misc_enum,
+        defsym_cmap_enum,
+        defsym_mon_syms_enum,
+        defsym_mon_defchars_enum,
+        objclass_defchars_enum,
+        objclass_classes_enum,
+        objclass_syms_enum,
+        arti_enum,
         NUM_ENUM_DUMPS
     };
     static const char *const titles[NUM_ENUM_DUMPS] = {
-        "monnums", "objects_nums" , "misc_object_nums"
+        "monnums", "objects_nums" , "misc_object_nums",
+        "cmap_symbols", "mon_syms", "mon_defchars",
+        "objclass_defchars", "objclass_classes",
+        "objclass_syms", "artifacts_nums",
     };
+
 #define dump_om(om) { om, #om }
     static const struct enum_dump omdump[] = {
+        dump_om(LAST_GENERIC),
+        dump_om(OBJCLASS_HACK),
+        dump_om(FIRST_OBJECT),
         dump_om(FIRST_AMULET),
         dump_om(LAST_AMULET),
         dump_om(FIRST_SPELL),
@@ -1111,22 +1220,51 @@ dump_enums(void)
     };
 #undef dump_om
     static const struct enum_dump *const ed[NUM_ENUM_DUMPS] = {
-        monsdump, objdump, omdump
+        monsdump, objdump, omdump,
+        defsym_cmap_dump, defsym_mon_syms_dump,
+        defsym_mon_defchars_dump,
+        objclass_defchars_dump,
+        objclass_classes_dump,
+        objclass_syms_dump,
+        arti_enum_dump,
     };
-    static const char *const pfx[NUM_ENUM_DUMPS] = { "PM_", "", "" };
-    static int szd[NUM_ENUM_DUMPS] = {
-        SIZE(monsdump), SIZE(objdump), SIZE(omdump)
+    static const char *const pfx[NUM_ENUM_DUMPS] = { "PM_", "", "",
+                                                     "", "", "", "",
+                                                     "", "", "" };
+    /* 0 = dump numerically only, 1 = add 'char' comment */
+    static const int dumpflgs[NUM_ENUM_DUMPS] = { 0, 0, 0, 0, 0, 1, 1, 0, 0, 0 };
+    static int szd[NUM_ENUM_DUMPS] = { SIZE(monsdump), SIZE(objdump),
+                                       SIZE(omdump), SIZE(defsym_cmap_dump),
+                                       SIZE(defsym_mon_syms_dump),
+                                       SIZE(defsym_mon_defchars_dump),
+                                       SIZE(objclass_defchars_dump),
+                                       SIZE(objclass_classes_dump),
+                                       SIZE(objclass_syms_dump),
+                                       SIZE(arti_enum_dump),
     };
     const char *nmprefix;
     int i, j, nmwidth;
+    char comment[BUFSZ];
 
     for (i = 0; i < NUM_ENUM_DUMPS; ++ i) {
         raw_printf("enum %s = {", titles[i]);
         for (j = 0; j < szd[i]; ++j) {
-            nmprefix = (j == szd[i] - 1) ? "" : pfx[i]; /* "" or "PM_" */
+            int unprefixed_count = (i == monsters_enum) ? 4 : 1;
+            nmprefix = (j >= szd[i] - unprefixed_count)
+                           ? "" : pfx[i]; /* "" or "PM_" */
             nmwidth = 27 - (int) strlen(nmprefix); /* 27 or 24 */
-            raw_printf("    %s%*s = %3d,",
-                       nmprefix, -nmwidth, ed[i][j].nm, ed[i][j].val);
+            if (dumpflgs[i] > 0) {
+                Snprintf(comment, sizeof comment,
+                         "    /* '%c' */",
+                         (ed[i][j].val >= 32 && ed[i][j].val <= 126)
+                         ? ed[i][j].val : ' ');
+            } else {
+                comment[0] = '\0';
+            }
+            raw_printf("    %s%*s = %3d,%s",
+                       nmprefix, -nmwidth,
+                       ed[i][j].nm, ed[i][j].val,
+                       comment);
        }
         raw_print("};");
         raw_print("");
@@ -1135,13 +1273,11 @@ dump_enums(void)
 }
 #endif /* NODUMPENUMS */
 
-#ifdef ENHANCED_SYMBOLS
 void
 dump_glyphids(void)
 {
     dump_all_glyphids(stdout);
 }
-#endif /* ENHANCED_SYMBOLS */
-#endif /* !NODUMPENUMS || ENHANCED_SYMBOLS */
+#endif /* !NODUMPENUMS */
 
 /*allmain.c*/

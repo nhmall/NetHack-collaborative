@@ -12,7 +12,7 @@
     <DatDir>$(RootDir)dat\</DatDir>
     <DocDir>$(RootDir)doc\</DocDir>
     <IncDir>$(RootDir)include\</IncDir>
-    <LuaDir>$(RootDir)submodules\lua\</LuaDir>
+    <LibDir>$(RootDir)lib\</LibDir>
     <SndWavDir>$(RootDir)sound\wav\</SndWavDir>
     <SndWindDir>$(RootDir)sound\windsound\</SndWindDir>
     <SrcDir>$(RootDir)src\</SrcDir>
@@ -27,8 +27,20 @@
     <IntDir>$(ObjDir)</IntDir>
     <WinCursDir>$(RootDir)win\curses\</WinCursDir>
     <SubmodulesDir>$(RootDir)submodules\</SubmodulesDir>
+    <LuaDir>$(SubmodulesDir)lua\</LuaDir>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(PDCURSES)'=='' AND Exists('$(RootDir)lib\PDCurses')">
-    <PDCURSES>$(RootDir)lib\PDCurses\</PDCURSES>
+  <PropertyGroup Condition="'$(PDCURSESMOD)'=='' AND Exists('$(SubmodulesDir)PDCursesMod')">
+    <PDCURSESMOD>$(SubmodulesDir)PDCursesMod\</PDCURSESMOD>
+    <PDCURSES>$(PDCURSESMOD)</PDCURSES>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(PDCURSESMOD)'=='' AND Exists('$(LibDir)PDCursesMod')">
+    <PDCURSESMOD>$(LibDir)PDCursesMod\</PDCURSESMOD>
+    <PDCURSES>$(PDCURSESMOD)</PDCURSES>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(PDCURSES)'=='' AND '$(PDCURSESMOD)'=='' AND Exists('$(SubmodulesDir)PDCurses')">
+    <PDCURSES>$(SubmodulesDir)PDCurses\</PDCURSES>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(PDCURSES)'=='' AND '$(PDCURSESMOD)'=='' AND Exists('$(LibDir)PDCurses')">
+    <PDCURSES>$(LibDir)PDCurses\</PDCURSES>
   </PropertyGroup>
 </Project>

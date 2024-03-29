@@ -4,8 +4,8 @@
 
 #include "hack.h"
 
-static int explosionmask(struct monst *, uchar, char);
-static void engulfer_explosion_msg(uchar, char);
+staticfn int explosionmask(struct monst *, uchar, char) NONNULLARG1;
+staticfn void engulfer_explosion_msg(uchar, char);
 
 /* Note: Arrays are column first, while the screen is row first */
 static const int explosion[3][3] = {
@@ -22,7 +22,7 @@ enum explode_action {
 };
 
 /* check if shield effects are needed for location affected by explosion */
-static int
+staticfn int
 explosionmask(
     struct monst *m, /* target monster (might be youmonst) */
     uchar adtyp,     /* damage type */
@@ -114,7 +114,7 @@ explosionmask(
     return res;
 }
 
-static void
+staticfn void
 engulfer_explosion_msg(uchar adtyp, char olet)
 {
     const char *adj = (char *) 0;
@@ -209,7 +209,6 @@ explode(
     boolean visible, any_shield;
     int uhurt = 0; /* 0=unhurt, 1=items damaged, 2=you and items damaged */
     const char *str = (const char *) 0;
-    int idamres, idamnonres;
     struct monst *mtmp, *mdef = 0;
     uchar adtyp;
     int explmask[3][3]; /* 0=normal explosion, 1=do shieldeff, 2=do nothing */
@@ -259,6 +258,8 @@ explode(
     } else if (olet == SCROLL_CLASS) {
         /* ditto */
         exploding_wand_typ = SCR_FIRE;
+    } else if (olet == TRAP_EXPLODE) {
+        type = 0; /* hardcoded to generic magic explosion */
     }
     /* muse_unslime: SCR_FIRE */
     if (expltype < 0) {
@@ -415,7 +416,7 @@ explode(
                                        cmap_to_glyph(shield_static[k]));
                     }
                 curs_on_u(); /* will flush screen and output */
-                delay_output();
+                nh_delay_output();
             }
 
             /* Cover last shield glyph with blast symbol. */
@@ -430,8 +431,8 @@ explode(
                 }
 
         } else { /* delay a little bit. */
-            delay_output();
-            delay_output();
+            nh_delay_output();
+            nh_delay_output();
         }
 
         tmp_at(DISP_END, 0); /* clear the explosion */
@@ -455,6 +456,8 @@ explode(
     if (dam) {
         for (i = 0; i < 3; i++) {
             for (j = 0; j < 3; j++) {
+                int itemdmg = 0;
+
                 if (explmask[i][j] == EXPL_SKIP)
                     continue;
                 xx = x + i - 1;
@@ -471,7 +474,7 @@ explode(
                     /* for inside_engulfer, only <u.ux,u.uy> is affected */
                     continue;
                 }
-                idamres = idamnonres = 0;
+
                 /* Affect the floor unless the player caused the explosion
                  * from inside their engulfer. */
                 if (!(u.uswallow && !gc.context.mon_moving))
@@ -505,19 +508,22 @@ explode(
                     pline("%s is caught in the %s!", Monnam(mtmp), str);
                 }
 
+                itemdmg = destroy_items(mtmp, (int) adtyp, dam);
                 if (adtyp == AD_FIRE) {
                     (void) burnarmor(mtmp);
                     ignite_items(mtmp->minvent);
                 }
-                idamres += destroy_mitem(mtmp, SCROLL_CLASS, (int) adtyp);
-                idamres += destroy_mitem(mtmp, SPBOOK_CLASS, (int) adtyp);
-                idamnonres += destroy_mitem(mtmp, POTION_CLASS, (int) adtyp);
-                idamnonres += destroy_mitem(mtmp, RING_CLASS, (int) adtyp);
-                idamnonres += destroy_mitem(mtmp, WAND_CLASS, (int) adtyp);
 
                 if ((explmask[i][j] & EXPL_MON) != 0) {
-                    golemeffects(mtmp, (int) adtyp, dam + idamres);
-                    mtmp->mhp -= idamnonres;
+                    /* damage from ring/wand explosion isn't itself
+                     * electrical in nature, nor is damage from freezing potion
+                     * really cold in nature, nor is damage from boiling potion
+                     * or exploding oil; only burning items damage is the "same
+                     * type" as the explosion. Because this is imperfect and
+                     * marginal (burning items only deal 1 damage), ignore it
+                     * for golemeffects(). */
+                    golemeffects(mtmp, (int) adtyp, dam);
+                    mtmp->mhp -= itemdmg; /* item destruction dmg */
                 } else {
                     /* call resist with 0 and do damage manually so 1) we can
                      * get out the message before doing the damage, and 2) we
@@ -544,8 +550,7 @@ explode(
                         mdam *= 2;
                     else if (resists_fire(mtmp) && adtyp == AD_COLD)
                         mdam *= 2;
-                    mtmp->mhp -= mdam;
-                    mtmp->mhp -= (idamres + idamnonres);
+                    mtmp->mhp -= mdam + itemdmg;
                 }
                 if (DEADMONSTER(mtmp)) {
                     int xkflg = ((adtyp == AD_FIRE
@@ -586,7 +591,7 @@ explode(
     if (uhurt) {
         /* give message for any monster-induced explosion
            or player-induced one other than scroll of fire */
-        if (Verbose(1, explode) && (type < 0 || olet != SCROLL_CLASS)) {
+        if (flags.verbose && (type < 0 || olet != SCROLL_CLASS)) {
             if (do_hallu) { /* (see explanation above) */
                 do {
                     Sprintf(hallu_buf, "%s explosion",
@@ -609,11 +614,7 @@ explode(
             (void) burnarmor(&gy.youmonst);
             ignite_items(gi.invent);
         }
-        destroy_item(SCROLL_CLASS, (int) adtyp);
-        destroy_item(SPBOOK_CLASS, (int) adtyp);
-        destroy_item(POTION_CLASS, (int) adtyp);
-        destroy_item(RING_CLASS, (int) adtyp);
-        destroy_item(WAND_CLASS, (int) adtyp);
+        (void) destroy_items(&gy.youmonst, (int) adtyp, dam);
 
         ugolemeffects((int) adtyp, damu);
         if (uhurt == 2) {
@@ -628,12 +629,14 @@ explode(
                 u.mh -= damu;
             else
                 u.uhp -= damu;
-            gc.context.botl = 1;
+            disp.botl = TRUE;
         }
 
         /* You resisted the damage, lets not keep that to ourselves */
         if (uhurt == 1)
             monstseesu_ad(adtyp);
+        else
+            monstunseesu_ad(adtyp);
 
         if (u.uhp <= 0 || (Upolyd && u.mh <= 0)) {
             if (Upolyd) {
@@ -645,6 +648,11 @@ explode(
                     else if (str != gk.killer.name && str != hallu_buf)
                         Strcpy(gk.killer.name, str);
                     gk.killer.format = KILLED_BY_AN;
+                } else if (olet == TRAP_EXPLODE) {
+                    gk.killer.format = NO_KILLER_PREFIX;
+                    Snprintf(gk.killer.name, sizeof gk.killer.name,
+                             "caught %sself in a %s", uhim(),
+                             str);
                 } else if (type >= 0 && olet != SCROLL_CLASS) {
                     gk.killer.format = NO_KILLER_PREFIX;
                     Snprintf(gk.killer.name, sizeof gk.killer.name,
@@ -715,8 +723,8 @@ scatter(coordxy sx, coordxy sy,  /* location of objects to scatter */
         unsigned int scflags,
         struct obj *obj) /* only scatter this obj        */
 {
-    register struct obj *otmp;
-    register int tmp;
+    struct obj *otmp;
+    int tmp;
     int farthest = 0;
     uchar typ;
     long qtmp;
@@ -871,7 +879,7 @@ scatter(coordxy sx, coordxy sy,  /* location of objects to scatter */
                 } else {
                     if (scflags & VIS_EFFECTS) {
                         /* tmp_at(gb.bhitpos.x, gb.bhitpos.y); */
-                        /* delay_output(); */
+                        /* nh_delay_output(); */
                     }
                 }
                 stmp->ox = gb.bhitpos.x;

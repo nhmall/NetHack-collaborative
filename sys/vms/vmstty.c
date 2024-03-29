@@ -9,6 +9,13 @@
 #include "wintty.h"
 #include "tcap.h"
 
+#ifdef VMSVSI
+#include <lib$routines.h>
+#include <smg$routines.h>
+#include <starlet.h>
+#include <elfdef.h>
+#endif
+
 #include <descrip.h>
 #include <iodef.h>
 #ifndef __GNUC__
@@ -32,11 +39,16 @@
 #include <errno.h>
 #include <signal.h>
 
+
+#ifndef VMSVSI
 unsigned long lib$disable_ctrl(), lib$enable_ctrl();
 unsigned long sys$assign(), sys$dassgn(), sys$qiow();
+#endif
 #ifndef USE_QIO_INPUT
+#ifndef VMSVSI
 unsigned long smg$create_virtual_keyboard(), smg$delete_virtual_keyboard(),
     smg$read_keystroke(), smg$cancel_input();
+#endif
 #else
 static short parse_function_key(int);
 #endif
@@ -171,16 +183,16 @@ vms_getchar(void)
         } else if (kb_buf == ESC || kb_buf == CSI || kb_buf == SS3) {
             switch (parse_function_key((int) kb_buf)) {
             case SMG$K_TRM_UP:
-                key = gc.Cmd.move_N;
+                key = gc.Cmd.dirchars[2];
                 break;
             case SMG$K_TRM_DOWN:
-                key = gc.Cmd.move_S;
+                key = gc.Cmd.dirchars[6];
                 break;
             case SMG$K_TRM_LEFT:
-                key = gc.Cmd.move_W;
+                key = gc.Cmd.dirchars[0];
                 break;
             case SMG$K_TRM_RIGHT:
-                key = gc.Cmd.move_E;
+                key = gc.Cmd.dirchars[4];
                 break;
             default:
                 key = ESC;
@@ -281,7 +293,7 @@ static const char *arrow_or_PF = "ABCDPQRS", /* suffix char */
 /* Ultimate return value is (index into smg_keypad_codes[] + 256). */
 
 static short
-parse_function_key(register int c)
+parse_function_key(int c)
 {
     struct _rd_iosb iosb;
     unsigned long sts;
@@ -307,8 +319,8 @@ parse_function_key(register int c)
     } else
         sts = SS$_NORMAL;
     if (vms_ok(sts) || sts == SS$_TIMEOUT) {
-        register int cnt = iosb.trm_offset + iosb.trm_siz + inc;
-        register char *p = seq_buf;
+        int cnt = iosb.trm_offset + iosb.trm_siz + inc;
+        char *p = seq_buf;
 
         if (c == ESC) /* check for 7-bit vt100/ANSI, or vt52 */
             if (*p == '[' || *p == 'O')
@@ -316,7 +328,7 @@ parse_function_key(register int c)
             else if (strchr(arrow_or_PF, *p))
                 c = SS3; /*CSI*/
         if (cnt > 0 && (c == SS3 || (c == CSI && strchr(arrow_or_PF, *p)))) {
-            register char *q = strchr(smg_keypad_codes, *p);
+            char *q = strchr(smg_keypad_codes, *p);
 
             if (q)
                 result = 256 + (q - smg_keypad_codes);
@@ -505,7 +517,7 @@ setftty(void)
     settty_needed = TRUE;
 }
 
-/* enable kbd interupts if enabled when game started */
+/* enable kbd interrupts if enabled when game started */
 void
 intron(void)
 {
@@ -521,9 +533,11 @@ introff(void)
 
 #ifdef TIMED_DELAY
 
+#ifndef VMSVSI
 extern unsigned long lib$emul(const long *, const long *, const long *,
                               long *);
 extern unsigned long sys$schdwk(), sys$hiber();
+#endif
 
 #define VMS_UNITS_PER_SECOND 10000000L /* hundreds of nanoseconds, 1e-7 */
 /* constant for conversion from milliseconds to VMS delta time (negative) */
@@ -563,7 +577,40 @@ VA_DECL(const char *, s)
     VA_END();
 #ifndef SAVE_ON_FATAL_ERROR
     /* prevent vmsmain's exit handler byebye() from calling hangup() */
-    sethanguphandler((void (*)(int) )) SIG_DFL;
+/*    sethanguphandler((void (*)(int) )) SIG_DFL; */
+    sethanguphandler((SIG_RET_TYPE) SIG_DFL);
 #endif
     exit(EXIT_FAILURE);
 }
+
+#ifdef SIGWINCH
+/* called by resize_tty(wintty.c) after receiving a SIGWINCH signal;
+   terminal size has changed and we should update LI and CO (from termcap) */
+void
+getwindowsz(void)
+{
+    /*
+     * gettty() has code to do this, but it can't be used directly because
+     * it fetches terminal state in order to reset that upon termination.
+     * We need to avoid clobbering other saved state with values used by
+     * game-in-progress.  For now, do nothing.
+     */
+    return;
+}
+#endif
+
+#ifdef ENHANCED_SYMBOLS
+/*
+ * set in tty_start_screen() and allows
+ * OS-specific changes that may be
+ * required for support of utf8.
+ * Currently a placeholder for VMS.
+ */
+void
+tty_utf8graphics_fixup(void)
+{
+    return;
+}
+#endif  /* ENHANCED_SYMBOLS */
+
+/*vmstty.c */

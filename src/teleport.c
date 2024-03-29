@@ -1,21 +1,23 @@
-/* NetHack 3.7	teleport.c	$NHDT-Date: 1654710406 2022/06/08 17:46:46 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.169 $ */
+/* NetHack 3.7	teleport.c	$NHDT-Date: 1685863331 2023/06/04 07:22:11 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.206 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2011. */
 /* NetHack may be freely redistributed.  See license for details. */
 
 #include "hack.h"
+#define NEW_ENEXTO
 
-static boolean goodpos_onscary(coordxy, coordxy, struct permonst *);
-static boolean tele_jump_ok(coordxy, coordxy, coordxy, coordxy);
-static boolean teleok(coordxy, coordxy, boolean);
-static void vault_tele(void);
-static boolean rloc_pos_ok(coordxy, coordxy, struct monst *);
-static void rloc_to_core(struct monst *, coordxy, coordxy, unsigned);
-static void mvault_tele(struct monst *);
-static boolean m_blocks_teleporting(struct monst *);
+staticfn boolean goodpos_onscary(coordxy, coordxy, struct permonst *);
+staticfn boolean tele_jump_ok(coordxy, coordxy, coordxy, coordxy);
+staticfn boolean teleok(coordxy, coordxy, boolean);
+staticfn void vault_tele(void);
+staticfn boolean rloc_pos_ok(coordxy, coordxy, struct monst *);
+staticfn void rloc_to_core(struct monst *, coordxy, coordxy, unsigned);
+staticfn void mvault_tele(struct monst *);
+staticfn boolean m_blocks_teleporting(struct monst *);
+staticfn stairway *stairway_find_forwiz(boolean, boolean);
 
 /* does monster block others from teleporting? */
-static boolean
+staticfn boolean
 m_blocks_teleporting(struct monst *mtmp)
 {
     if (is_dlord(mtmp->data) || is_dprince(mtmp->data))
@@ -25,7 +27,7 @@ m_blocks_teleporting(struct monst *mtmp)
 
 /* teleporting is prevented on this level for this monster? */
 boolean
-noteleport_level(struct monst* mon)
+noteleport_level(struct monst *mon)
 {
     /* demon court in Gehennom prevent others from teleporting */
     if (In_hell(&u.uz) && !(is_dlord(mon->data) || is_dprince(mon->data)))
@@ -42,7 +44,7 @@ noteleport_level(struct monst* mon)
 /* this is an approximation of onscary() that doesn't use any 'struct monst'
    fields aside from 'monst->data'; used primarily for new monster creation
    and monster teleport destination, not for ordinary monster movement */
-static boolean
+staticfn boolean
 goodpos_onscary(
     coordxy x, coordxy y,
     struct permonst *mptr)
@@ -85,7 +87,8 @@ goodpos(
     boolean ignorewater = ((gpflags & MM_IGNOREWATER) != 0),
             ignorelava = ((gpflags & MM_IGNORELAVA) != 0),
             checkscary = ((gpflags & GP_CHECKSCARY) != 0),
-            allow_u = ((gpflags & GP_ALLOW_U) != 0);
+            allow_u = ((gpflags & GP_ALLOW_U) != 0),
+            avoid_monpos = ((gpflags & GP_AVOID_MONPOS) != 0);
 
     if (!isok(x, y))
         return FALSE;
@@ -102,6 +105,9 @@ goodpos(
             && (!u.usteed || mtmp != u.usteed))
             return FALSE;
     }
+
+    if (MON_AT(x, y) && avoid_monpos)
+        return FALSE;
 
     if (mtmp) {
         struct monst *mtmp2 = m_at(x, y);
@@ -188,6 +194,70 @@ enexto(
             || enexto_core(cc, xx, yy, mdat, NO_MM_FLAGS));
 }
 
+#ifdef NEW_ENEXTO
+
+boolean
+enexto_core(
+    coord *cc, /* output; <cc.x,cc.y> as close as feasible to <xx,yy> */
+    coordxy xx, coordxy yy, /* input coordinates */
+    struct permonst *mdat,  /* type of monster; affects whether water or
+                             * lava or boulder spots will be considered */
+    mmflags_nht entflags)   /* flags for goodpos() */
+{
+    coord candy[ROWNO * (COLNO - 1)]; /* enough room for every location */
+    int i, nearcandyct, allcandyct;
+    struct monst fakemon; /* dummy monster */
+    boolean allow_xx_yy = (boolean) ((entflags & GP_ALLOW_XY) != 0);
+    /* note: GP_ALLOW_XY isn't used by goodpos(); old enext_core() used to
+       mask it off to hide it from goodpos but that isn't required and we
+       want to keep it in case the debugpline4() gets called */
+
+    if (!mdat) {
+        debugpline0("enexto() called with null mdat");
+        /* default to player's original monster type */
+        mdat = &mons[u.umonster];
+    }
+    fakemon = cg.zeromonst;
+    set_mon_data(&fakemon, mdat); /* set up for goodpos() */
+
+    /* gather candidate coordinates within 3 steps, those 1 step away in
+       random order first, then those 2 steps away in random order, then 3;
+       this will usually find a good spot without scanning the whole map */
+    nearcandyct = collect_coords(candy, xx, yy, 3, CC_NO_FLAGS,
+                                 (boolean (*)(coordxy, coordxy)) 0);
+    for (i = 0; i < nearcandyct; ++i) {
+        *cc = candy[i];
+        if (goodpos(cc->x, cc->y, &fakemon, entflags))
+            return TRUE;
+    }
+
+    /* didn't find a spot; gather coordinates for the whole map except
+       for <xx,yy> itself, ordered in expanding distance from <xx,yy>
+       (subsets of equal distance grouped together with order randomized) */
+    allcandyct = collect_coords(candy, xx, yy, 0, CC_NO_FLAGS,
+                                (boolean (*)(coordxy, coordxy)) 0);
+    /* skip first 'nearcandyct' spots, they have already been rejected;
+       they will occur in different random order but same overall total */
+    for (i = nearcandyct; i < allcandyct; ++i) {
+        *cc = candy[i];
+        if (goodpos(cc->x, cc->y, &fakemon, entflags))
+            return TRUE;
+    }
+
+    /* still didn't find a spot; maybe try <xx,yy> itself */
+    cc->x = xx, cc->y = yy; /* final value for 'cc' in case we return False */
+    if (allow_xx_yy && goodpos(cc->x, cc->y, &fakemon, entflags))
+        return TRUE;
+
+    /* failed to find any acceptable spot */
+    debugpline4("enexto(\"%s\",%d,%d,0x%08lx) failed",
+                mdat->pmnames[NEUTRAL], (int) xx, (int) yy,
+                (unsigned long) entflags);
+    return FALSE;
+}
+
+#else   /* !NEW_ENEXTO */
+
 boolean
 enexto_core(
     coord *cc,
@@ -272,7 +342,7 @@ enexto_core(
             return TRUE; /* 'cc' is set */
         } else {
             debugpline3("enexto(\"%s\",%d,%d) failed",
-                        mdat->pmnames[NEUTRAL], xx, yy);
+                        mdat->pmnames[NEUTRAL], (int) xx, (int) yy);
             return FALSE;
         }
     }
@@ -283,14 +353,17 @@ enexto_core(
     cc->x = good[i].x;
     cc->y = good[i].y;
     return TRUE;
+#undef MAX_GOOD
 }
+
+#endif /* ?NEW_ENEXTO */
 
 /*
  * Check for restricted areas present in some special levels.  (This might
  * need to be augmented to allow deliberate passage in wizard mode, but
  * only for explicitly chosen destinations.)
  */
-static boolean
+staticfn boolean
 tele_jump_ok(coordxy x1, coordxy y1, coordxy x2, coordxy y2)
 {
     if (!isok(x2, y2))
@@ -324,7 +397,7 @@ tele_jump_ok(coordxy x1, coordxy y1, coordxy x2, coordxy y2)
     return TRUE;
 }
 
-static boolean
+staticfn boolean
 teleok(coordxy x, coordxy y, boolean trapok)
 {
     if (!trapok) {
@@ -434,7 +507,6 @@ teleds(coordxy nux, coordxy nuy, int teleds_flags)
     fill_pit(u.ux0, u.uy0);
     if (ball_active && uchain && uchain->where == OBJ_FREE)
         placebc(); /* put back the ball&chain if they were taken off map */
-    initrack(); /* teleports mess up tracking monsters without this */
     update_player_regions();
     /*
      *  Make sure the hero disappears from the old location.  This will
@@ -446,11 +518,12 @@ teleds(coordxy nux, coordxy nuy, int teleds_flags)
     see_monsters();
     gv.vision_full_recalc = 1;
     nomul(0);
+    notice_mon_off();
     vision_recalc(0); /* vision before effects */
 
     /* this used to take place sooner, but if a --More-- prompt was issued
        then the old map display was shown instead of the new one */
-    if (is_teleport && Verbose(2, teleds))
+    if (is_teleport && flags.verbose)
         You("materialize in %s location!",
             (nux == u.ux0 && nuy == u.uy0) ? "the same" : "a different");
     /* if terrain type changes, levitation or flying might become blocked
@@ -475,30 +548,212 @@ teleds(coordxy nux, coordxy nuy, int teleds_flags)
     /* possible shop entry message comes after guard's shrill whistle */
     spoteffects(TRUE);
     invocation_message();
+    notice_mon_on();
+    notice_all_mons(TRUE);
+    return;
 }
 
+/* make a list of coordinates in expanding distance from <cx,cy>;
+   return value is number of coordinates inserted into ccc[]  */
+int
+collect_coords(
+    coord *ccc, /* pointer to array of at least size ROWNO*(COLNO-1) */
+    coordxy cx, coordxy cy, /* center point, not necessarily <u.ux,u.uy> */
+    int maxradius,          /* how far from center to go collecting spots;
+                             * 0 means collect entire map */
+    unsigned cc_flags,      /* incl_center: put <cx,cy> in output list
+                             * (provided that it passes filter, if any);
+                             * unshuffled: keep output in collection order;
+                             * ring_pairs: shuffle pairs of rings together
+                             * instead of keeping each ring distinct;
+                             * skip_mons: reject occupied spots;
+                             * skip_inaccs: reject !ZAP_POS() spots */
+    boolean (*filter)(coordxy, coordxy)) /* if Null, no filtering */
+{
+    coordxy x, y, lox, hix, loy, hiy;
+    int radius, rowrange, colrange, k, n = 0;
+    coord cc, *passcc = NULL;
+    boolean newpass, passend,
+            /* is <cx,cy> a candidate? */
+            include_cxcy = (cc_flags & CC_INCL_CENTER) != 0,
+            /* flag is negative; turn local variable into positive */
+            scramble = (cc_flags & CC_UNSHUFFLED) == 0,
+            /* if scrambling, shuffle rings 1+2, 3+4, &c together */
+            ring_pairs = (scramble && (cc_flags & CC_RING_PAIRS) != 0),
+            /* exclude locations containing monsters from output */
+            skip_mons = (cc_flags & CC_SKIP_MONS) != 0,
+            /* exclude !ZAP_POS() locations from output; allows pools+lava */
+            skip_inaccessible = (cc_flags & CC_SKIP_INACCS) != 0;
+    int result = 0;
+
+    rowrange = (cy < ROWNO / 2) ? (ROWNO - 1 - cy) : cy;
+    colrange = (cx < COLNO / 2) ? (COLNO - 1 - cx) : cx;
+    k = max(rowrange, colrange);
+    /* if no radius limit has been specified, cover the whole map */
+    if (!maxradius)
+        maxradius = k;
+    else
+        maxradius = min(maxradius, k);
+    /*
+     * We operate on an expanding radius around the center, optionally
+     * starting with the center spot itself, and shuffle the edges of
+     * each expanding square or "ring".  (So all 1's are shuffled at
+     * end of the pass for radius==1, then all 2's at end of radius==2,
+     * and so on.  Shuffling of each ring doesn't encroach on any of
+     * the others except when ring_pairs mode is specified.)
+     *
+     * Diagram of first three rings (four if 'include_cxcy' is specified)
+     *   rings       unshuffled output      sample shuffled output (varies)
+     *  3333333     25 26  .  .  .  . 31     33 29  .  .  .  . 44
+     *  3222223     32  9 10 11 12 13 33     35 22 16 14 24 13 40
+     *  3211123     34 14  1  2  3 15  .     38 20  2  8  3 15  .
+     *  3210123     .  16  4  0  5 17  .     .  11  1  0  6  9  .
+     *  3211123     .  18  6  7  8 19 39     .  19  5  7  4 12 25
+     *  3222223     40 20 21 22 23 24 41     43 10 21 17 23 18 27
+     *  3333333     42  .  .  .  . 47 48     37  .  .  .  . 30 36
+     * . == entry not shown to reduce clutter when viewing inner portion.
+     *
+     * The digits under 'rings' are ring number, which is also distmin
+     * from center, indicating the order in which sets of spots are
+     * evaluated.  Output gets collected in expanding rings.  For the
+     * two output grids, the number shown represents the position in the
+     * returned list of coordinates.  When shuffling while ring_pairs is
+     * specified, the 1's and 2's will be mixed together, the 3's and
+     * (unshown) 4's will be mixed together, and so forth.
+     *
+     * If caller processes the output list in order, the closest viable
+     * spot will be chosen.  If a completely random spot is preferred,
+     * the list can be requested to be unscrambled and then the caller
+     * can shuffle it, overriding the collection rings.  A filter function
+     * could be used to skip everything after the first acceptable spot.
+     * 'ring_pairs' mode allows for choosing a very close spot that isn't
+     * immediately adjacent to the center point, useful for emergency
+     * teleport to not always end up at the closest possible spot.
+     *
+     * TODO:
+     *  Redo filter interface to have caller pass in a context cookie
+     *  that can be passed through to filter so that it could have access
+     *  to more info than just <x,y>.  Also add a way to stop collecting
+     *  when an optimal value is found, without checking and skipping the
+     *  rest of the map.
+     */
+    for (radius = include_cxcy ? 0 : 1; radius <= maxradius; ++radius) {
+        if (!ring_pairs) {
+            newpass = passend = TRUE;
+        } else {
+            /* 0 (if include_cxcy) and maxradius override odd/even */
+            newpass = ((radius % 2) != 0 || radius == 0); /* odd */
+            passend = ((radius % 2) == 0 || radius == maxradius); /* even */
+        }
+        if (newpass || !passcc) { /* !passcc is redundant but used to fend
+                                   * off analyzers thinking use of passcc
+                                   * below might occur while still Null */
+            passcc = ccc; /* start of output entries for current radius (or
+                           * first half of radius pair depending on flags) */
+            n = 0; /* number of entries for passcc; used for shuffling */
+        }
+        lox = cx - radius, hix = cx + radius;
+        loy = cy - radius, hiy = cy + radius;
+        for (y = max(loy, 0); y <= hiy; ++y) {
+            if (y > ROWNO - 1)
+                break; /* done with collection for current radius */
+            for (x = max(lox, 1); x <= hix; ++x) { /* column 0 is not used */
+                if (x > COLNO - 1)
+                    break; /* advance to next 'y' */
+                if (x != lox && x != hix && y != loy && y != hiy)
+                    continue; /* not any edge of ring/square */
+                if ((skip_mons && m_at(x, y))
+                    /* note: !ACCESSIBLE() would reject water and lava;
+                       !ZAP_POS() accepts them; caller needs to handle such */
+                    || (skip_inaccessible && !ZAP_POS(levl[x][y].typ)))
+                    continue; /* quick filters */
+                if (filter && !(*filter)(x, y))
+                    continue;
+                cc.x = x, cc.y = y;
+                *ccc++ = cc;
+                ++n;
+                ++result;
+            }
+        }
+        if (scramble && passend) {
+            /* shuffle entries gathered for current radius (or pair) */
+            while (n > 1) {
+                k = rn2(n); /* 0..n-1 */
+                if (k) { /* swap [k] with [0] when k is 1..n-1 */
+                    cc = passcc[0];
+                    passcc[0] = passcc[k];
+                    passcc[k] = cc;
+                }
+                ++passcc; /* passcc[0] has reached its final place    */
+                --n;      /* and become exempt from further shuffling */
+            }
+        }
+    } /* radius loop */
+    debugpline4("collect_coords(,%d,%d,%d,,)=%d", cx, cy, maxradius, result);
+    return result;
+}
+
+/* [try to] teleport hero to a safe spot */
 boolean
 safe_teleds(int teleds_flags)
 {
     coordxy nux, nuy;
-    int tcnt = 0;
+    unsigned cc_flags;
+    coord candy[ROWNO * (COLNO - 1)], backupspot;
+    int tcnt, candycount;
 
-    do {
+    /*
+     * This used to try random locations up to 400 times, with first 200
+     * tries disallowing trap locations and remaining 200 accepting such.
+     * On levels without many accessible locations (either due to being
+     * mostly stone or high monster population) it could fail to find a
+     * spot.
+     *
+     * Now it tries completely randomly only 40 times, all disallowing
+     * traps, then resorts to checking the entire map, near hero's spot
+     * first then expanding out from there.  If no non-trap spot is found,
+     * first trap spot is used.
+     */
+    for (tcnt = 0; tcnt < 40; ++tcnt) {
         nux = rnd(COLNO - 1);
         nuy = rn2(ROWNO);
-    } while (!teleok(nux, nuy, (boolean) (tcnt > 200)) && ++tcnt <= 400);
+        if (teleok(nux, nuy, FALSE)) {
+            teleds(nux, nuy, teleds_flags);
+            return TRUE;
+        }
+    }
 
-    if (tcnt <= 400) {
-        teleds(nux, nuy, teleds_flags);
+    /* get a shuffled list of candidate locations, starting with spots
+       1 or 2 steps from hero, then 3 or 4 steps, then 5 or 6, on up */
+    cc_flags = CC_RING_PAIRS | CC_SKIP_MONS;
+    if (!Passes_walls)
+        cc_flags |= CC_SKIP_INACCS;
+    candycount = collect_coords(candy, u.ux, u.uy, 0, cc_flags,
+                                (boolean (*)(coordxy, coordxy)) 0);
+    backupspot.x = backupspot.y = 0;
+    /* skip trap locations via teleok(,,FALSE) but remember first
+       encountered trap spot that is acceptable to teleok(,,TRUE) */
+    for (tcnt = 0; tcnt < candycount; ++tcnt) {
+        nux = candy[tcnt].x, nuy = candy[tcnt].y;
+        if (teleok(nux, nuy, FALSE)) {
+            teleds(nux, nuy, teleds_flags);
+            return TRUE;
+        }
+        if (!backupspot.x && t_at(nux, nuy) && teleok(nux, nuy, TRUE))
+            backupspot.x = nux, backupspot.y = nuy;
+    }
+    /* no non-trap spot found; if we skipped a viable trap spot, use it */
+    if (backupspot.x) {
+        teleds(backupspot.x, backupspot.y, teleds_flags);
         return TRUE;
-    } else
-        return FALSE;
+    }
+    return FALSE;
 }
 
-static void
+staticfn void
 vault_tele(void)
 {
-    register struct mkroom *croom = search_special(VAULT);
+    struct mkroom *croom = search_special(VAULT);
     coord c;
 
     if (croom && somexyspace(croom, &c) && teleok(c.x, c.y, FALSE)) {
@@ -509,9 +764,9 @@ vault_tele(void)
 }
 
 boolean
-teleport_pet(register struct monst* mtmp, boolean force_it)
+teleport_pet(struct monst *mtmp, boolean force_it)
 {
-    register struct obj *otmp;
+    struct obj *otmp;
 
     if (mtmp == u.usteed)
         return FALSE;
@@ -544,7 +799,7 @@ tele(void)
 
 /* teleport the hero; usually discover scroll of teleportation if via scroll */
 void
-scrolltele(struct obj* scroll)
+scrolltele(struct obj *scroll)
 {
     coord cc;
 
@@ -663,7 +918,7 @@ dotelecmd(void)
         menu_item *picks = (menu_item *) 0;
         anything any;
         winid win;
-        int i, tmode, clr = 0;
+        int i, tmode, clr = NO_COLOR;
 
         win = create_nhwindow(NHW_MENU);
         start_menu(win, MENU_BEHAVE_STANDARD);
@@ -721,6 +976,11 @@ dotelecmd(void)
         (void) tport_spell(added + hidden - NOOP_SPELL);
 
     return res ? ECMD_TIME : ECMD_OK;
+#undef NOOP_SPELL
+#undef HIDE_SPELL
+#undef ADD_SPELL
+#undef UNHIDESPELL
+#undef REMOVESPELL
 }
 
 int
@@ -789,6 +1049,7 @@ dotele(
            but they both yield the same result.] */
 #define spellev(spell_otyp) ((int) objects[spell_otyp].oc_level)
         energy = 5 * spellev(SPE_TELEPORT_AWAY);
+#undef spelllev
 #if 0
         /* the addition of !break_the_rules to the outer if-block in
            1ada454f rendered this dead code */
@@ -830,7 +1091,7 @@ dotele(
         } else {
             /* bypassing spelleffects(); apply energy cost directly */
             u.uen -= energy;
-            gc.context.botl = 1;
+            disp.botl = TRUE;
         }
     }
 
@@ -853,14 +1114,23 @@ void
 level_tele(void)
 {
     static const char get_there_from[] = "get there from %s.";
-    register int newlev;
+    int newlev;
     d_level newlevel;
     const char *escape_by_flying = 0; /* when surviving dest of -N */
     char buf[BUFSZ];
     boolean force_dest = FALSE;
 
-    if (iflags.debug_fuzzer)
-        goto random_levtport;
+    if (iflags.debug_fuzzer) {
+        do {
+            newlevel.dnum = rn2(gn.n_dgns);
+        } while (newlevel.dnum == astral_level.dnum
+                 || gd.dungeons[newlevel.dnum].flags.unconnected
+                 || !gd.dungeons[newlevel.dnum].num_dunlevs);
+        newlevel.dlevel = 1 + rn2(dunlevs_in_dungeon(&newlevel));
+        assign_level(&u.ucamefrom, &u.uz);
+        schedule_goto(&newlevel, UTOTYPE_NONE, (char *) 0, (char *) 0);
+        return;
+    }
     if ((u.uhave.amulet || In_endgame(&u.uz) || In_sokoban(&u.uz))
         && !wizard) {
         You_feel("very disoriented for a moment.");
@@ -889,17 +1159,13 @@ level_tele(void)
                             the previous input was invalid so don't use it
                             as getlin()'s preloaded default answer */
             getlin(qbuf, buf);
-            if (!strcmp(buf, "\033")) { /* cancelled */
-                if (Confusion && rnl(5)) {
-                    pline("Oops...");
-                    goto random_levtport;
-                }
-                return;
-            } else if (!strcmp(buf, "*")) {
+            if (!strcmp(buf, "*")) {
                 goto random_levtport;
             } else if (Confusion && rnl(5)) {
                 pline("Oops...");
                 goto random_levtport;
+            } else if (!strcmp(buf, "\033")) { /* cancelled */
+                return;
             }
             if (wizard && !strcmp(buf, "?")) {
                 schar destlev;
@@ -1107,9 +1373,8 @@ level_tele(void)
     }
 
     schedule_goto(&newlevel, UTOTYPE_NONE, (char *) 0,
-                  Verbose(2, level_tele)
-                      ? "You materialize on a different level!"
-                      : (char *) 0);
+                  flags.verbose ? "You materialize on a different level!"
+                                : (char *) 0);
 #if 0   /* always wait until end of turn to change level, otherwise code
          * that references monsters as this call stack unwinds won't be
          * able to access them reliably; the do-the-change-now code here
@@ -1128,7 +1393,7 @@ void
 domagicportal(struct trap *ttmp)
 {
     struct d_level target_level;
-    s_level *tutlvl = find_level("tut-1");
+    int totype;
     const char *stunmsg = (char *) 0;
 
     if (u.utrap && u.utraptype == TT_BURIEDBALL)
@@ -1158,13 +1423,18 @@ domagicportal(struct trap *ttmp)
     target_level = ttmp->dst;
 
     /* coming back from tutorial doesn't trigger stunning */
-    if (!(tutlvl && tutlvl->dlevel.dnum == u.uz.dnum)) {
+    if (In_tutorial(&u.uz) && !In_tutorial(&target_level)) {
+        /* returning to normal play => arrive on level 1 stairs */
+        totype = UTOTYPE_ATSTAIRS;
+        stunmsg = "Resuming regular play.";
+    } else {
+        totype = UTOTYPE_PORTAL;
         stunmsg = !Stunned ? "You feel slightly dizzy."
                             : "You feel dizzier.";
         make_stunned((HStun & TIMEOUT) + 3L, FALSE);
     }
 
-    schedule_goto(&target_level, UTOTYPE_PORTAL, stunmsg, (char *) 0);
+    schedule_goto(&target_level, totype, stunmsg, (char *) 0);
 }
 
 void
@@ -1221,7 +1491,7 @@ level_tele_trap(struct trap *trap, unsigned int trflags)
 }
 
 /* check whether monster can arrive at location <x,y> via Tport (or fall) */
-static boolean
+staticfn boolean
 rloc_pos_ok(
     coordxy x, coordxy y, /* coordinates of candidate location */
     struct monst *mtmp)
@@ -1251,15 +1521,15 @@ rloc_pos_ok(
                                         gu.updest.hx, gu.updest.hy)
                     && (!gu.updest.nlx
                         || !within_bounded_area(x, y,
-                                                gu.updest.nlx, gu.updest.nly,
-                                                gu.updest.nhx, gu.updest.nhy)));
+                                              gu.updest.nlx, gu.updest.nly,
+                                              gu.updest.nhx, gu.updest.nhy)));
         if (gd.dndest.lx && (yy & 1) == 0) /* moving down */
             return (within_bounded_area(x, y, gd.dndest.lx, gd.dndest.ly,
                                         gd.dndest.hx, gd.dndest.hy)
                     && (!gd.dndest.nlx
                         || !within_bounded_area(x, y,
-                                                gd.dndest.nlx, gd.dndest.nly,
-                                                gd.dndest.nhx, gd.dndest.nhy)));
+                                              gd.dndest.nlx, gd.dndest.nly,
+                                              gd.dndest.nhx, gd.dndest.nhy)));
     } else {
         /* [try to] prevent a shopkeeper or temple priest from being
            sent out of his room (caller might resort to goodpos() if
@@ -1288,7 +1558,7 @@ rloc_pos_ok(
  * a value because mtmp is a migrating_mon.  Worm tails are always
  * placed randomly around the head of the worm.
  */
-static void
+staticfn void
 rloc_to_core(
     struct monst *mtmp,
     coordxy x, coordxy y,
@@ -1338,7 +1608,7 @@ rloc_to_core(
         if (u.uswallow) {
             u_on_newpos(mtmp->mx, mtmp->my);
             docrt();
-        } else if (!next2u(mtmp->mx, mtmp->my)) {
+        } else if (!m_next2u(mtmp)) {
            unstuck(mtmp);
         }
     }
@@ -1351,6 +1621,7 @@ rloc_to_core(
         const char *next = (du <= 2) ? " next to you" : 0, /* next2u() */
                    *nearu = (du <= BOLT_LIM * BOLT_LIM) ? " close by" : 0;
 
+        set_msg_xy(x, y);
         mtmp->mstrategy &= ~STRAT_APPEARMSG; /* one chance only */
         if (telemsg && (couldsee(x, y) || sensemon(mtmp))) {
             pline("%s vanishes and reappears%s.",
@@ -1418,7 +1689,7 @@ rloc_to_flag(
     rloc_to_core(mtmp, x, y, rlocflags);
 }
 
-static stairway *
+staticfn stairway *
 stairway_find_forwiz(boolean isladder, boolean up)
 {
     stairway *stway = gs.stairs;
@@ -1429,16 +1700,17 @@ stairway_find_forwiz(boolean isladder, boolean up)
     return stway;
 }
 
-/* place a monster at a random location, typically due to teleport */
-/* return TRUE if successful, FALSE if not */
-/* rlocflags is RLOC_foo flags */
+/* place a monster at a random location, typically due to teleport;
+   return TRUE if successful, FALSE if not; rlocflags is RLOC_foo flags */
 boolean
 rloc(
-    struct monst *mtmp, /* mx==0 implies migrating monster arrival */
-    unsigned int rlocflags)
+    struct monst *mtmp, /* mtmp->mx==0 implies migrating monster arrival */
+    unsigned rlocflags)
 {
+    coord cc, backupcc, candy[ROWNO * (COLNO - 1)]; /* room for entire map */
+    unsigned cc_flags;
     coordxy x, y;
-    int trycount;
+    int trycount, i, j, candycount;
 
     if (mtmp == u.usteed) {
         tele();
@@ -1450,7 +1722,7 @@ rloc(
 
         if (!In_W_tower(u.ux, u.uy, &u.uz)) {
             stway = stairway_find_forwiz(FALSE, TRUE);
-        } else if (!stairway_find_forwiz(TRUE, FALSE)) { /* bottom level of tower */
+        } else if (!stairway_find_forwiz(TRUE, FALSE)) { /* bottom of tower */
             stway = stairway_find_forwiz(TRUE, TRUE);
         } else {
             stway = stairway_find_forwiz(TRUE, FALSE);
@@ -1466,34 +1738,110 @@ rloc(
             goto found_xy;
     }
 
-    trycount = 0;
-    do {
-        x = rn1(COLNO - 3, 2);
-        y = rn2(ROWNO);
-        /* rloc_pos_ok() passes GP_CHECKSCARY to goodpos(), we don't */
-        if ((trycount < 500) ? rloc_pos_ok(x, y, mtmp)
-                             : goodpos(x, y, mtmp, NO_MM_FLAGS))
+    /* wizard-mode player can choose destination by setting 'montelecontrol'
+       option; ignored if/when this is arrival of a migrating monster */
+    if (iflags.mon_telecontrol && mtmp->mx) {
+        cc.x = mtmp->mx, cc.y = mtmp->my;
+        if (control_mon_tele(mtmp, &cc, rlocflags, TRUE)) {
+            x = cc.x, y = cc.y;
             goto found_xy;
-    } while (++trycount < 1000);
+        }
+    }
 
-    /* last ditch attempt to find a good place */
-    for (x = 2; x < COLNO - 1; x++)
-        for (y = 0; y < ROWNO; y++)
-            if (goodpos(x, y, mtmp, NO_MM_FLAGS))
-                goto found_xy;
+    /* this used to try randomly 1000 times, then fallback to left-to-right
+       top-to-bottom exhaustive check; now that the exhaustive check uses
+       randomized order, reduce the number of random attempts to 50;
+       on levels with lots of available space, random can find a spot more
+       quickly but might fail to find one no matter how many tries it makes */
+    for (trycount = 0; trycount < 50; ++trycount) {
+        x = rnd(COLNO - 1); /* 1..COLNO-1 */
+        y = rn2(ROWNO); /* 0..ROWNO-1 */
+        if (rloc_pos_ok(x, y, mtmp)) /* rejects 'onscary' */
+            goto found_xy;
+    }
 
-    /* level either full of monsters or somehow faulty */
-    if ((rlocflags & RLOC_ERR) != 0)
-        impossible("rloc(): couldn't relocate monster");
-    return FALSE;
+    /* try harder to find a good place; gather a list of all candidate
+       locations (every accessible unoccupied spot except for hero's;
+       goodpos() will reject that), then shuffle them ourselves instead
+       of having collect_coords() do it (which would be in rings centered
+       around arbitrary <COLNO/2,ROWNO/2>) */
+    cc_flags = CC_INCL_CENTER | CC_UNSHUFFLED | CC_SKIP_MONS;
+    if (!passes_walls(mtmp->data))
+        cc_flags |= CC_SKIP_INACCS;
+    candycount = collect_coords(candy, COLNO / 2, ROWNO / 2, 0, cc_flags,
+                                (boolean (*)(coordxy, coordxy)) 0);
+    backupcc.x = backupcc.y = 0;
+    for (i = 0; i < candycount; ++i) {
+        if ((j = rn2(candycount - i)) > 0) {
+            cc = candy[i];
+            candy[i] = candy[i + j];
+            candy[i + j] = cc;
+        }
+        x = candy[i].x, y = candy[i].y;
+        if (rloc_pos_ok(x, y, mtmp))
+            goto found_xy;
+        if (!backupcc.x && goodpos(x, y, mtmp, NO_MM_FLAGS))
+            backupcc.x = x, backupcc.y = y;
+    }
 
+    /* we didn't find any spot acceptable to rloc_pos_ok() which avoids
+       'onscary' and honors teleport regions, but if we did find a spot
+       that was acceptable to goodpos() (which ignores 'onscary' and
+       teleport regions) we'll use that; otherwise give up */
+    if (!backupcc.x) {
+        /* level either full of monsters or somehow faulty */
+        if ((rlocflags & RLOC_ERR) != 0)
+            impossible("rloc(): couldn't relocate monster");
+        return FALSE;
+    }
+    x = backupcc.x, y = backupcc.y;
+    /*goto found_xy;*/
  found_xy:
     rloc_to_core(mtmp, x, y, rlocflags);
     return TRUE;
 }
 
-static void
-mvault_tele(struct monst* mtmp)
+/* let wizard-mode player choose a teleporting monster's destination */
+boolean
+control_mon_tele(
+    struct monst *mon,
+    coord *cc_p, /* input: default spot; output: player selected spot */
+    unsigned rlocflags,
+    boolean via_rloc)
+{
+    char tcbuf[BUFSZ];
+
+    if (!isok(cc_p->x, cc_p->y)) {
+        cc_p->x = mon->mx, cc_p->y = mon->my;
+        if (!isok(cc_p->x, cc_p->y))
+            cc_p->x = u.ux, cc_p->y = u.uy;
+    }
+
+    if (!wizard || !iflags.mon_telecontrol)
+        return FALSE;
+
+    pline("Teleport %s @ <%d,%d> where?",
+          noit_mon_nam(mon), mon->mx, mon->my);
+    /* getpos '?' will show "Move the cursor to <where to teleport Foo>:" */
+    Sprintf(tcbuf, "where to teleport %s", noit_mon_nam(mon));
+    if (getpos(cc_p, FALSE, tcbuf) >= 0 && !u_at(cc_p->x, cc_p->y)) {
+        if (via_rloc
+              ? rloc_pos_ok(cc_p->x, cc_p->y, mon)
+              : goodpos(cc_p->x, cc_p->y, mon, rlocflags))
+            return TRUE;
+        if (!iflags.debug_fuzzer) {
+            Sprintf(tcbuf, "<%d,%d> is not considered viable; force anyway?",
+                    mon->mx, mon->my);
+            if (y_n(tcbuf) == 'y')
+                return TRUE;
+        }
+    }
+    pline("%s destination.", via_rloc ? "Picking random" : "Using derived");
+    return FALSE;
+}
+
+staticfn void
+mvault_tele(struct monst *mtmp)
 {
     struct mkroom *croom = search_special(VAULT);
     coord c;
@@ -1506,7 +1854,7 @@ mvault_tele(struct monst* mtmp)
 }
 
 boolean
-tele_restrict(struct monst* mon)
+tele_restrict(struct monst *mon)
 {
     if (noteleport_level(mon)) {
         if (canseemon(mon))
@@ -1518,7 +1866,7 @@ tele_restrict(struct monst* mon)
 }
 
 void
-mtele_trap(struct monst* mtmp, struct trap* trap, int in_sight)
+mtele_trap(struct monst *mtmp, struct trap *trap, int in_sight)
 {
     char *monname;
 
@@ -1568,8 +1916,9 @@ mlevel_tele_trap(
                 assign_level(&tolevel, &valley_level);
             } else if (Is_botlevel(&u.uz)) {
                 if (in_sight && trap->tseen)
-                    pline("%s avoids the %s.", Monnam(mtmp),
-                          (tt == HOLE) ? "hole" : "trap");
+                    pline_xy(mtmp->mx, mtmp->my,
+                             "%s avoids the %s.", Monnam(mtmp),
+                             (tt == HOLE) ? "hole" : "trap");
                 return Trap_Effect_Finished;
             } else {
                 assign_level(&tolevel, &trap->dst);
@@ -1580,7 +1929,9 @@ mlevel_tele_trap(
                                       || is_home_elemental(mtmp->data)
                                       || rn2(7))) {
                 if (in_sight && mtmp->data->mlet != S_ELEMENTAL) {
-                    pline("%s seems to shimmer for a moment.", Monnam(mtmp));
+                    pline_xy(mtmp->mx, mtmp->my,
+                             "%s seems to shimmer for a moment.",
+                             Monnam(mtmp));
                     seetrap(trap);
                 }
                 return Trap_Effect_Finished;
@@ -1598,8 +1949,9 @@ mlevel_tele_trap(
                    currently inside his or her own special room */
                 || (tt == NO_TRAP && onscary(0, 0, mtmp))) {
                 if (in_sight)
-                    pline("%s seems very disoriented for a moment.",
-                          Monnam(mtmp));
+                    pline_xy(mtmp->mx, mtmp->my,
+                             "%s seems very disoriented for a moment.",
+                             Monnam(mtmp));
                 return Trap_Effect_Finished;
             }
             if (tt == NO_TRAP) {
@@ -1612,7 +1964,8 @@ mlevel_tele_trap(
                 nlev = random_teleport_level();
                 if (nlev == depth(&u.uz)) {
                     if (in_sight)
-                        pline("%s shudders for a moment.", Monnam(mtmp));
+                        pline_xy(mtmp->mx, mtmp->my,
+                                 "%s shudders for a moment.", Monnam(mtmp));
                     return Trap_Effect_Finished;
                 }
                 get_level(&tolevel, nlev);
@@ -1623,10 +1976,11 @@ mlevel_tele_trap(
         }
 
         if (in_sight) {
-            pline("Suddenly, %s %s.", mon_nam(mtmp),
-                  (tt == HOLE) ? "falls into a hole"
-                  : (tt == TRAPDOOR) ? "falls through a trap door"
-                  : "disappears out of sight");
+            pline_xy(mtmp->mx, mtmp->my,
+                     "Suddenly, %s %s.", mon_nam(mtmp),
+                     (tt == HOLE) ? "falls into a hole"
+                   : (tt == TRAPDOOR) ? "falls through a trap door"
+                   : "disappears out of sight");
             if (trap)
                 seetrap(trap);
         }
@@ -1640,7 +1994,7 @@ mlevel_tele_trap(
 
 /* place object randomly, returns False if it's gone (eg broken) */
 boolean
-rloco(register struct obj* obj)
+rloco(struct obj *obj)
 {
     coordxy tx, ty, otx, oty;
     boolean restricted_fall;
@@ -1666,8 +2020,8 @@ rloco(register struct obj* obj)
                                           gd.dndest.hx, gd.dndest.hy)
                      || (gd.dndest.nlx
                          && within_bounded_area(tx, ty,
-                                                gd.dndest.nlx, gd.dndest.nly,
-                                                gd.dndest.nhx, gd.dndest.nhy))))
+                                              gd.dndest.nlx, gd.dndest.nly,
+                                              gd.dndest.nhx, gd.dndest.nhy))))
              /* on the Wizard Tower levels, objects inside should
                 stay inside and objects outside should stay outside */
              || (gd.dndest.nlx && On_W_tower_level(&u.uz)
@@ -1798,7 +2152,7 @@ random_teleport_level(void)
 /* you teleport a monster (via wand, spell, or poly'd q.mechanic attack);
    return false iff the attempt fails */
 boolean
-u_teleport_mon(struct monst* mtmp, boolean give_feedback)
+u_teleport_mon(struct monst *mtmp, boolean give_feedback)
 {
     coord cc;
 
@@ -1811,8 +2165,8 @@ u_teleport_mon(struct monst* mtmp, boolean give_feedback)
             You("are no longer inside %s!", mon_nam(mtmp));
         unstuck(mtmp);
         (void) rloc(mtmp, RLOC_MSG);
-    } else if (is_rider(mtmp->data) && rn2(13)
-               && enexto(&cc, u.ux, u.uy, mtmp->data))
+    } else if ((is_rider(mtmp->data) || control_teleport(mtmp->data))
+               && rn2(13) && enexto(&cc, u.ux, u.uy, mtmp->data))
         rloc_to(mtmp, cc.x, cc.y);
     else
         (void) rloc(mtmp, RLOC_MSG);

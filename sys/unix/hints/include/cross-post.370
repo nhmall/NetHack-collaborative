@@ -22,9 +22,9 @@ $(TARGETPFX)tile.o : tile.c
 $(TARGETPFX)exceptn.o : ../lib/djgpp/djgpp-patch/src/libc/go32/exceptn.S
 	$(TARGET_CC) -c -o $@ ../lib/djgpp/djgpp-patch/src/libc/go32/exceptn.S
 	$(TARGET_AR) ru ../lib/djgpp/i586-pc-msdosdjgpp/lib/libc.a $(TARGETPFX)exceptn.o
-$(GAMEBIN) : $(HOBJ) $(LUACROSSLIB)
+$(GAMEBIN) : $(HOBJ) $(HACKLIB) $(LUACROSSLIB)
 	$(TARGET_LINK) $(TARGET_LFLAGS) -o $(GAMEBIN) \
-	$(HOBJ) $(WINLIB) $(TARGET_LIBS)
+	$(HOBJ) $(HACKLIB) $(WINLIB) $(TARGET_LIBS)
 $(DOSFONT)/ter-u16b.psf: $(FONTTOP)/ter-u16b.bdf $(DOSFONT)/nh-u16b.bdf $(DOSFONT)/makefont.lua $(LUABIN)
 	$(LUABIN) $(DOSFONT)/makefont.lua $(FONTTOP)/ter-u16b.bdf $(DOSFONT)/nh-u16b.bdf $@
 $(DOSFONT)/ter-u16v.psf: $(FONTTOP)/ter-u16v.bdf $(DOSFONT)/nh-u16v.bdf $(DOSFONT)/makefont.lua $(LUABIN)
@@ -65,6 +65,11 @@ dospkg: dodata dosfonts $(GAMEBIN) $(TARGETPFX)recover.exe ../dat/nhtiles.bmp
 	cp $(DOSFONT)/ter-u28b.psf $(TARGETPFX)pkg/TER-U28B.PSF
 	cp $(DOSFONT)/ter-u32b.psf $(TARGETPFX)pkg/TER-U32B.PSF
 	cp  ../lib/djgpp/cwsdpmi/bin/CWSDPMI.EXE $(TARGETPFX)pkg/CWSDPMI.EXE
+	( if [ -f ../lib/djgpp/symify/simify.exe ]; then \
+	      cp  ../lib/djgpp/symify/simify.exe $(TARGETPFX)pkg/SYMIFY.EXE; \
+          else \
+              pwd; echo "../lib/djgpp/symify/symify.exe not found"; \
+	  fi; )
 	-touch $(TARGETPFX)pkg/RECORD
 	cd $(TARGETPFX)pkg ; zip -9 ../NH370DOS.ZIP * ; cd ../../..
 	@echo msdos package zip file $(TARGETPFX)NH370DOS.ZIP
@@ -103,6 +108,32 @@ $(TARGETPFX)winshim.o : ../win/shim/winshim.c $(HACK_H)
 $(TARGETPFX)libnhmain.o : ../sys/libnh/libnhmain.c $(HACK_H)
 endif  # CROSS_TO_WASM
 #
+ifdef CROSS_TO_MIPS
+$(MIPS_TARGET): pregame $(TARGETPFX)date.o $(HOSTOBJ) $(HOBJ) $(LUACROSSLIB) $(MIPS_DATA_DIR)
+	-rm $@
+	$(TARGET_CC) $(TARGET_LFLAGS) $(TARGET_CFLAGS) -o $@ \
+		$(HOBJ) $(TARGETPFX)date.o $(TARGET_LIBS)
+
+$(MIPS_DATA_DIR): $(MIPS_DATA_DIR)/nhdat
+	touch $(MIPS_DATA_DIR)/perm
+	touch $(MIPS_DATA_DIR)/record
+	touch $(MIPS_DATA_DIR)/logfile
+	touch $(MIPS_DATA_DIR)/xlogfile
+	touch $(MIPS_DATA_DIR)/livelog
+	cp ../sys/unix/sysconf $(MIPS_DATA_DIR)/sysconf
+
+$(MIPS_DATA_DIR)/nhdat:
+	( cd ..; $(MAKE) INSTDIR='$(MIPS_DATA_DIR)' $(MIPSDEP) dofiles-dlb )
+
+#
+$(TARGETPFX)unixmain.o : ../sys/unix/unixmain.c $(HACK_H)
+$(TARGETPFX)unixres.o : ../sys/unix/unixres.c $(HACK_H)
+$(TARGETPFX)unixunix.o : ../sys/unix/unixunix.c $(HACK_H)
+$(TARGETPFX)ioctl.o : ../sys/share/ioctl.c $(HACK_H)
+$(TARGETPFX)unixtty.o : ../sys/share/unixtty.c $(HACK_H)
+endif  # CROSS_TO_MIPS
+#
+
 
 ifdef CROSS_SHARED
 # shared file dependencies
@@ -118,6 +149,10 @@ $(TARGETPFX)recover.exe : $(TARGETPFX)recover.o
 	$(TARGET_LINK) $(TARGET_LFLAGS) $(TARGETPFX)recover.o -o $@
 endif  # CROSS_SHARED
 #
+ifdef CROSS
+$(TARGETPFX)hacklib.a: $(TARGETPFX)hacklib.o
+	$(TARGET_AR) $(TARGET_ARFLAGS) $@ $(TARGETPFX)hacklib.o
+endif
 ifdef BUILD_TARGET_LUA
 # Lua lib
 $(LUACROSSLIB): $(LUALIBOBJS)
@@ -165,12 +200,31 @@ $(TARGETPFX)lvm.o : $(LUATOP)/src/lvm.c
 $(TARGETPFX)lzio.o : $(LUATOP)/src/lzio.c
 endif  # BUILD_TARGET_LUA
 
+ifdef BUILD_TARGET_NCURSES
+.PHONY: build-ncurses
+ifdef MAKEFILE_SRC
+../lib/ncurses.tar.gz:
+	@echo "You will need to successfully execute 'make CROSS_TO_MIPS=1 fetch-ncurses' first"
+	@false
+$(TARGETPFX)ncurses/lib/libncurses.a: ../lib/ncurses.tar.gz
+	(cd $(TARGETDIR) ; mkdir -p ncurses ; cd ncurses ; tar -xf ../../../lib/ncurses.tar.gz --strip-components=1 ; \
+	./configure --build i686-pc-linux-gnu --host mipsel-linux-gnu ; \
+	make ; \
+	cd ../../../src)
+endif   #MAKEFILE_SRC
+ifdef MAKEFILE_TOP
+.PHONY: fetch-ncurses
+fetch-ncurses:
+	(cd lib ; curl https://invisible-island.net/datafiles/release/ncurses.tar.gz --output ncurses.tar.gz ; cd ..)
+endif
+endif   #BUILD_TARGET_NCURSES
+
 ifdef BUILD_PDCURSES
 ifdef WANT_WIN_CURSES
 $(TARGETPFX)pdclib.a : $(PDCLIBOBJS) $(PDCOBJS)
 	if [ -f $@ ]; then rm $@; fi;
 	$(TARGET_AR) rcs $@ $(PDCLIBOBJS) $(PDCOBJS)
-endif
+endif  #WANT_WIN_CURSES
 # PDCurses src
 $(TARGETPFX)addch.o : $(PDCTOP)/pdcurses/addch.c
 $(TARGETPFX)addchstr.o : $(PDCTOP)/pdcurses/addchstr.c
@@ -219,9 +273,10 @@ $(TARGETPFX)pdckbd.o : $(PDCPORT)/pdckbd.c
 $(TARGETPFX)pdcscrn.o : $(PDCPORT)/pdcscrn.c
 $(TARGETPFX)pdcsetsc.o : $(PDCPORT)/pdcsetsc.c
 $(TARGETPFX)pdcutil.o : $(PDCPORT)/pdcutil.c
+	$(TARGET_CC) $(PDCINCL) $(PDC_TARGET_CFLAGS) \
+		-Wno-sign-compare -o$@  $(PDCPORT)/pdcutil.c
+# -Wno-sign-compare
 endif  # BUILD_PDCURSES
 #
 # End of cross-compiling -POST section
 #===============-=================================================
-
-

@@ -220,6 +220,7 @@ NetHackQtMenuWindow::NetHackQtMenuWindow(QWidget *parent) :
             this, SLOT(TableCellClicked(int,int)));
 
     setLayout(grid);
+    setModal(true);
 }
 
 NetHackQtMenuWindow::~NetHackQtMenuWindow()
@@ -258,7 +259,7 @@ NetHackQtMenuWindow::MenuItem::~MenuItem()
 }
 
 void NetHackQtMenuWindow::AddMenu(int glyph, const ANY_P *identifier,
-                                  char ch, char gch, int attr,
+                                  char ch, char gch, int attr, int clr,
                                   const QString& str, unsigned itemflags)
 {
     bool presel = (itemflags & MENU_ITEMFLAGS_SELECTED) != 0;
@@ -279,11 +280,11 @@ void NetHackQtMenuWindow::AddMenu(int glyph, const ANY_P *identifier,
     itemlist[itemcount].ch = ch;
     itemlist[itemcount].gch = gch;
     itemlist[itemcount].attr = attr;
+    itemlist[itemcount].color = clr;
     itemlist[itemcount].str = str;
     itemlist[itemcount].selected = itemlist[itemcount].preselected = presel;
     itemlist[itemcount].itemflags = itemflags;
     itemlist[itemcount].count = -1L;
-    itemlist[itemcount].color = -1;
     // Display the boulder symbol correctly
     if (str.left(8) == "boulder\t") {
 	int bracket = str.indexOf('[');
@@ -292,12 +293,6 @@ void NetHackQtMenuWindow::AddMenu(int glyph, const ANY_P *identifier,
 		+ QChar(cp437(str.at(bracket+1).unicode()))
 		+ str.mid(bracket+2);
 	}
-    }
-    int mcolor, mattr;
-    if (attr == 0 && ::iflags.use_menu_color
-        && get_menu_coloring(str.toLatin1().constData(), &mcolor, &mattr)) {
-	itemlist[itemcount].attr = mattr;
-	itemlist[itemcount].color = mcolor;
     }
     ++itemcount;
 
@@ -547,6 +542,56 @@ static const char *color_name(const QColor q)
 }
 #endif
 
+void NetHackQtMenuWindow::SetTwiAttr(QTableWidgetItem *twi, int color, int attr)
+{
+    if (color != NO_COLOR) {
+	twi->setForeground(colors[color].q);
+    }
+
+    if (attr != ATR_NONE) {
+        QFont itemfont(table->font());
+        switch (attr) {
+        case ATR_BOLD:
+            itemfont.setWeight(QFont::Bold);
+            twi->setFont(itemfont);
+            break;
+        case ATR_ITALIC:
+            itemfont.setItalic(true);
+            twi->setFont(itemfont);
+            break;
+        case ATR_DIM:
+            twi->setFlags(Qt::NoItemFlags);
+            break;
+        case ATR_ULINE:
+            itemfont.setUnderline(true);
+            twi->setFont(itemfont);
+            break;
+        case ATR_INVERSE: {
+            QBrush fg = twi->foreground();
+            QBrush bg = twi->background();
+            if (fg.color() == bg.color()) {
+                // default foreground and background come up the same for
+                // some unknown reason
+                //[pr: both are set to 'Qt::color1' which has same RGB
+                //     value as 'Qt::black'; X11 on OSX behaves similarly]
+                if (fg.color() == Qt::color1) {
+                    fg = Qt::black;
+                    bg = Qt::white;
+                } else {
+                    fg = (bg.color() == Qt::white) ? Qt::black : Qt::white;
+                }
+            }
+            twi->setForeground(bg);
+            twi->setBackground(fg);
+            break;
+        }
+        case ATR_BLINK:
+            // not supported
+            break;
+        } /* switch */
+    } /* if attr != ATR_NONE */
+}
+
 void NetHackQtMenuWindow::AddRow(int row, const MenuItem& mi)
 {
     QFontMetrics fm(table->font());
@@ -618,48 +663,7 @@ void NetHackQtMenuWindow::AddRow(int row, const MenuItem& mi)
     table->item(row, 4)->setFlags(Qt::ItemIsEnabled);
     WidenColumn(4, fm.QFM_WIDTH(text));
 
-    if ((int) mi.color != -1) {
-	twi->setForeground(colors[mi.color].q);
-    }
-
-    if (mi.attr != ATR_NONE) {
-        QFont itemfont(table->font());
-        switch (mi.attr) {
-        case ATR_BOLD:
-            itemfont.setWeight(QFont::Bold);
-            twi->setFont(itemfont);
-            break;
-        case ATR_DIM:
-            twi->setFlags(Qt::NoItemFlags);
-            break;
-        case ATR_ULINE:
-            itemfont.setUnderline(true);
-            twi->setFont(itemfont);
-            break;
-        case ATR_INVERSE: {
-            QBrush fg = twi->foreground();
-            QBrush bg = twi->background();
-            if (fg.color() == bg.color()) {
-                // default foreground and background come up the same for
-                // some unknown reason
-                //[pr: both are set to 'Qt::color1' which has same RGB
-                //     value as 'Qt::black'; X11 on OSX behaves similarly]
-                if (fg.color() == Qt::color1) {
-                    fg = Qt::black;
-                    bg = Qt::white;
-                } else {
-                    fg = (bg.color() == Qt::white) ? Qt::black : Qt::white;
-                }
-            }
-            twi->setForeground(bg);
-            twi->setBackground(fg);
-            break;
-        }
-        case ATR_BLINK:
-            // not supported
-            break;
-        } /* switch */
-    } /* if mi.attr != ATR_NONE */
+    SetTwiAttr(twi, mi.color, mi.attr);
 }
 
 void NetHackQtMenuWindow::WidenColumn(int column, int width)
@@ -802,7 +806,7 @@ void NetHackQtMenuWindow::ChooseNone()
         itemlist[row].preselected = false; // stale for all rows
         // skip if not selectable or already unselected or fails invert_test()
         if (!itemlist[row].Selectable()
-            || !itemlist[row].selected
+            || (!itemlist[row].selected && !isSelected(row))
             || !menuitem_invert_test(2, itemlist[row].itemflags, TRUE))
             continue;
         itemlist[row].selected = false;
@@ -1010,6 +1014,7 @@ NetHackQtTextWindow::NetHackQtTextWindow(QWidget *parent) :
     setFocusPolicy(Qt::StrongFocus);
     // needed so that keystrokes get sent to our keyPressEvent()
     lines->setFocusPolicy(Qt::NoFocus);
+    setModal(true);
 }
 
 void NetHackQtTextWindow::doUpdate()
@@ -1284,57 +1289,89 @@ NetHackQtMenuOrTextWindow::NetHackQtMenuOrTextWindow(QWidget *parent_) :
 {
 }
 
+// StartMenu() turns a MenuOrTextWindow into a MenuWindow,
+// PutStr() turns one into a TextWindow;
+// calling any other MenuOrTextWindow routine before either of those
+// elicits a warning.  (Should probably quit via panic() instead.)
+void NetHackQtMenuOrTextWindow::MenuOrText_too_soon_warning(const char *which)
+{
+    impossible("'%s' called before we know whether window is Menu or Text.",
+               which);
+}
+
 QWidget* NetHackQtMenuOrTextWindow::Widget()
 {
-    if (!actual) impossible("Widget called before we know if Menu or Text");
-    return actual->Widget();
+    QWidget *result = NULL;
+    if (!actual)
+        MenuOrText_too_soon_warning("Widget");
+    else
+        result = actual->Widget();
+    return result;
 }
 
 // Text
 void NetHackQtMenuOrTextWindow::Clear()
 {
-    if (!actual) impossible("Clear called before we know if Menu or Text");
-    actual->Clear();
+    if (!actual)
+        MenuOrText_too_soon_warning("Clear");
+    else
+        actual->Clear();
 }
 void NetHackQtMenuOrTextWindow::Display(bool block)
 {
-    if (!actual) impossible("Display called before we know if Menu or Text");
-    actual->Display(block);
+    if (!actual)
+        MenuOrText_too_soon_warning("Display");
+    else
+        actual->Display(block);
 }
 bool NetHackQtMenuOrTextWindow::Destroy()
 {
-    if (!actual) impossible("Destroy called before we know if Menu or Text");
-    return actual->Destroy();
+    bool result = false;
+    if (!actual)
+        MenuOrText_too_soon_warning("Destroy");
+    else
+        result = actual->Destroy();
+    return result;
 }
-
 void NetHackQtMenuOrTextWindow::PutStr(int attr, const QString& text)
 {
-    if (!actual) actual=new NetHackQtTextWindow(parent);
-    actual->PutStr(attr,text);
+    if (!actual)
+        actual = new NetHackQtTextWindow(parent);
+    actual->PutStr(attr, text);
 }
 
 // Menu
 void NetHackQtMenuOrTextWindow::StartMenu(bool using_WIN_INVEN)
 {
-    if (!actual) actual=new NetHackQtMenuWindow(parent);
+    if (!actual)
+        actual = new NetHackQtMenuWindow(parent);
     actual->StartMenu(using_WIN_INVEN);
 }
-void NetHackQtMenuOrTextWindow::AddMenu(int glyph, const ANY_P* identifier,
-                                        char ch, char gch, int attr,
-                                        const QString& str, unsigned itemflags)
+void NetHackQtMenuOrTextWindow::AddMenu(
+    int glyph, const ANY_P* identifier,
+    char ch, char gch, int attr, int clr,
+    const QString& str, unsigned itemflags)
 {
-    if (!actual) impossible("AddMenu called before we know if Menu or Text");
-    actual->AddMenu(glyph,identifier,ch,gch,attr,str,itemflags);
+    if (!actual)
+        MenuOrText_too_soon_warning("AddMenu");
+    else
+        actual->AddMenu(glyph, identifier, ch, gch, attr, clr, str, itemflags);
 }
 void NetHackQtMenuOrTextWindow::EndMenu(const QString& prompt)
 {
-    if (!actual) impossible("EndMenu called before we know if Menu or Text");
-    actual->EndMenu(prompt);
+    if (!actual)
+        MenuOrText_too_soon_warning("EndMenu");
+    else
+        actual->EndMenu(prompt);
 }
 int NetHackQtMenuOrTextWindow::SelectMenu(int how, MENU_ITEM_P **menu_list)
 {
-    if (!actual) impossible("SelectMenu called before we know if Menu or Text");
-    return actual->SelectMenu(how,menu_list);
+    int result = -1; // cancelled
+    if (!actual)
+        MenuOrText_too_soon_warning("SelectMenu");
+    else
+        result = actual->SelectMenu(how, menu_list);
+    return result;
 }
 
 } // namespace nethack_qt_

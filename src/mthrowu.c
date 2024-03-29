@@ -5,12 +5,13 @@
 
 #include "hack.h"
 
-static int monmulti(struct monst *, struct obj *, struct obj *);
-static void monshoot(struct monst *, struct obj *, struct obj *);
-static boolean ucatchgem(struct obj *, struct monst *);
-static const char* breathwep_name(int);
-static int drop_throw(struct obj *, boolean, coordxy, coordxy);
-static int m_lined_up(struct monst *, struct monst *);
+staticfn int monmulti(struct monst *, struct obj *, struct obj *);
+staticfn void monshoot(struct monst *, struct obj *, struct obj *);
+staticfn boolean ucatchgem(struct obj *, struct monst *);
+staticfn const char *breathwep_name(int);
+staticfn boolean drop_throw(struct obj *, boolean, coordxy, coordxy);
+staticfn boolean blocking_terrain(coordxy, coordxy);
+staticfn int m_lined_up(struct monst *, struct monst *) NONNULLARG12;
 
 #define URETREATING(x, y) \
     (distmin(u.ux, u.uy, x, y) > distmin(u.ux0, u.uy0, x, y))
@@ -25,7 +26,7 @@ static NEARDATA const char *breathwep[] = {
 };
 
 /* hallucinatory ray types */
-const char *const hallublasts[] = {
+static const char *const hallublasts[] = {
     "asteroids", "beads", "bubbles", "butterflies", "champagne", "chaos",
     "coins", "cotton candy", "crumbs", "dark matter", "darkness", "dust specks",
     "emoticons", "emotions", "entropy", "flowers", "foam", "fog", "gamma rays",
@@ -48,11 +49,11 @@ const char *const hallublasts[] = {
 const char *
 rnd_hallublast(void)
 {
-    return hallublasts[rn2(SIZE(hallublasts))];
+    return ROLL_FROM(hallublasts);
 }
 
 boolean
-m_has_launcher_and_ammo(struct monst* mtmp)
+m_has_launcher_and_ammo(struct monst *mtmp)
 {
     struct obj *mwep = MON_WEP(mtmp);
 
@@ -102,7 +103,7 @@ thitu(
 
     if (u.uac + tlev <= (dieroll = rnd(20))) {
         ++gm.mesg_given;
-        if (Blind || !Verbose(2, thitu1)) {
+        if (Blind || !flags.verbose) {
             pline("It misses.");
         } else if (u.uac + tlev <= dieroll - 2) {
             if (onm != onmbuf)
@@ -112,7 +113,7 @@ thitu(
             You("are almost hit by %s.", onm);
         return 0;
     } else {
-        if (Blind || !Verbose(2, thitu2))
+        if (Blind || !flags.verbose)
             You("are hit%s", exclam(dam));
         else
             You("are hit by %s%s", onm, exclam(dam));
@@ -120,7 +121,8 @@ thitu(
         if (is_acid && Acid_resistance) {
             pline("It doesn't seem to hurt you.");
             monstseesu(M_SEEN_ACID);
-        } else if (stone_missile(obj) && passes_rocks(gy.youmonst.data)) {
+        } else if (obj && stone_missile(obj) && passes_rocks(gy.youmonst.data)) {
+
             /* use 'named' as an approximation for "hitting from above";
                we avoid "passes through you" for horizontal flight path
                because missile stops and that wording would suggest that
@@ -139,8 +141,10 @@ thitu(
                 pline_The("silver sears your flesh!");
                 exercise(A_CON, FALSE);
             }
-            if (is_acid)
+            if (is_acid) {
                 pline("It burns!");
+                monstunseesu(M_SEEN_ACID);
+            }
             losehp(dam, knm, kprefix); /* acid damage */
             exercise(A_STR, FALSE);
         }
@@ -150,57 +154,49 @@ thitu(
 
 /* Be sure this corresponds with what happens to player-thrown objects in
  * dothrow.c (for consistency). --KAA
- * Returns 0 if object still exists (not destroyed).
+ * Returns FALSE if object still exists (not destroyed).
  */
-static int
+staticfn boolean
 drop_throw(
-    register struct obj *obj,
+    struct obj *obj,
     boolean ohit,
     coordxy x,
     coordxy y)
 {
-    int retvalu = 1;
-    int create;
-    struct monst *mtmp;
-    struct trap *t;
+    boolean broken;
 
     if (obj->otyp == CREAM_PIE || obj->oclass == VENOM_CLASS
-        || (ohit && obj->otyp == EGG))
-        create = 0;
-    else if (ohit && (is_multigen(obj) || obj->otyp == ROCK))
-        create = !rn2(3);
-    else
-        create = 1;
+        || (ohit && obj->otyp == EGG)) {
+        broken = TRUE;
+    } else {
+        broken = (ohit && should_mulch_missile(obj));
+    }
 
-    if (create && !((mtmp = m_at(x, y)) != 0 && mtmp->mtrapped
-                    && (t = t_at(x, y)) != 0
-                    && is_pit(t->ttyp))) {
-        int objgone = 0;
-
+    if (broken) {
+        delobj(obj);
+    } else {
         if (down_gate(x, y) != -1)
-            objgone = ship_object(obj, x, y, FALSE);
-        if (!objgone) {
-            if (!flooreffects(obj, x, y, "fall")) {
+            broken = ship_object(obj, x, y, FALSE);
+        if (!broken) {
+            struct monst *mtmp = m_at(x, y);
+            if (!(broken = flooreffects(obj, x, y, "fall"))) {
                 place_object(obj, x, y);
                 if (!mtmp && u_at(x, y))
                     mtmp = &gy.youmonst;
                 if (mtmp && ohit)
                     passive_obj(mtmp, obj, (struct attack *) 0);
                 stackobj(obj);
-                retvalu = 0;
             }
         }
-    } else {
-        delobj(obj);
     }
     gt.thrownobj = 0;
-    return retvalu;
+    return broken;
 }
 
 /* calculate multishot volley count for mtmp throwing otmp (if not ammo) or
    shooting otmp with mwep (if otmp is ammo and mwep appropriate launcher) */
-static int
-monmulti(struct monst* mtmp, struct obj* otmp, struct obj* mwep)
+staticfn int
+monmulti(struct monst *mtmp, struct obj *otmp, struct obj *mwep)
 {
     int multishot = 1;
 
@@ -258,8 +254,8 @@ monmulti(struct monst* mtmp, struct obj* otmp, struct obj* mwep)
 }
 
 /* mtmp throws otmp, or shoots otmp with mwep, at hero or at monster mtarg */
-static void
-monshoot(struct monst* mtmp, struct obj* otmp, struct obj* mwep)
+staticfn void
+monshoot(struct monst *mtmp, struct obj *otmp, struct obj *mwep)
 {
     struct monst *mtarg = gm.mtarget;
     int dm = distmin(mtmp->mx, mtmp->my,
@@ -287,6 +283,7 @@ monshoot(struct monst* mtmp, struct obj* otmp, struct obj* mwep)
         }
         gm.m_shot.s = ammo_and_launcher(otmp, mwep) ? TRUE : FALSE;
         Strcpy(trgbuf, mtarg ? some_mon_nam(mtarg) : "");
+        set_msg_xy(mtmp->mx, mtmp->my);
         pline("%s %s %s%s%s!", Monnam(mtmp),
               gm.m_shot.s ? "shoots" : "throws", onm,
               mtarg ? " at " : "", trgbuf);
@@ -313,8 +310,10 @@ monshoot(struct monst* mtmp, struct obj* otmp, struct obj* mwep)
 }
 
 /* an object launched by someone/thing other than player attacks a monster;
-   return 1 if the object has stopped moving (hit or its range used up) */
-int
+   return 1 if the object has stopped moving (hit or its range used up)
+   can anger the monster, if this happened due to hero (eg. exploding
+   bag of holding throwing the items) */
+boolean
 ohitmon(
     struct monst *mtmp, /* accidental target, located at <gb.bhitpos.x,.y> */
     struct obj *otmp,   /* missile; might be destroyed by drop_throw */
@@ -324,10 +323,10 @@ ohitmon(
     boolean verbose)/* give message(s) even when you can't see what happened */
 {
     int damage, tmp;
-    boolean vis, ismimic;
-    int objgone = 1;
+    boolean vis, ismimic, objgone;
     struct obj *mon_launcher = gm.marcher ? MON_WEP(gm.marcher) : NULL;
 
+    /* assert(otmp != NULL); */
     gn.notonhead = (gb.bhitpos.x != mtmp->mx || gb.bhitpos.y != mtmp->my);
     ismimic = M_AP_TYPE(mtmp) && M_AP_TYPE(mtmp) != M_AP_MONSTER;
     vis = cansee(gb.bhitpos.x, gb.bhitpos.y);
@@ -485,18 +484,21 @@ ohitmon(
             mtmp->mblinded = tmp;
         }
 
+        if (!DEADMONSTER(mtmp) && !gc.context.mon_moving)
+            setmangry(mtmp, TRUE);
+
         objgone = drop_throw(otmp, 1, gb.bhitpos.x, gb.bhitpos.y);
         if (!objgone && range == -1) { /* special case */
             obj_extract_self(otmp);    /* free it for motion again */
-            return 0;
+            return FALSE;
         }
-        return 1;
+        return TRUE;
     }
-    return 0;
+    return FALSE;
 }
 
 /* hero catches gem thrown by mon iff poly'd into unicorn; might drop it */
-static boolean
+staticfn boolean
 ucatchgem(
     struct obj *gem,   /* caller has verified gem->oclass */
     struct monst *mon)
@@ -589,7 +591,7 @@ m_throw(
         clear_dknown(singleobj); /* singleobj->dknown = 0; */
 
     if ((singleobj->cursed || singleobj->greased) && (dx || dy) && !rn2(7)) {
-        if (canseemon(mon) && Verbose(2, m_throw)) {
+        if (canseemon(mon) && flags.verbose) {
             if (is_ammo(singleobj))
                 pline("%s misfires!", Monnam(mon));
             else
@@ -752,16 +754,16 @@ m_throw(
             break;
         }
         tmp_at(gb.bhitpos.x, gb.bhitpos.y);
-        delay_output();
+        nh_delay_output();
     }
     tmp_at(gb.bhitpos.x, gb.bhitpos.y);
-    delay_output();
+    nh_delay_output();
     tmp_at(DISP_END, 0);
     gm.mesg_given = 0; /* reset */
 
     if (blindinc) {
         u.ucreamed += blindinc;
-        make_blinded(Blinded + (long) blindinc, FALSE);
+        make_blinded(BlindedTimeout + (long) blindinc, FALSE);
         if (!Blind)
             Your1(vision_clears);
     }
@@ -774,10 +776,10 @@ m_throw(
 
 /* Monster throws item at another monster */
 int
-thrwmm(struct monst* mtmp, struct monst* mtarg)
+thrwmm(struct monst *mtmp, struct monst *mtarg)
 {
     struct obj *otmp, *mwep;
-    register coordxy x, y;
+    coordxy x, y;
     boolean ispole;
 
     /* Polearms won't be applied by monsters against other monsters */
@@ -785,13 +787,13 @@ thrwmm(struct monst* mtmp, struct monst* mtarg)
         mtmp->weapon_check = NEED_RANGED_WEAPON;
         /* mon_wield_item resets weapon_check as appropriate */
         if (mon_wield_item(mtmp) != 0)
-            return MM_MISS;
+            return M_ATTK_MISS;
     }
 
     /* Pick a weapon */
     otmp = select_rwep(mtmp);
     if (!otmp)
-        return MM_MISS;
+        return M_ATTK_MISS;
     ispole = is_pole(otmp);
 
     x = mtmp->mx;
@@ -806,22 +808,22 @@ thrwmm(struct monst* mtmp, struct monst* mtarg)
             if (ammo_and_launcher(otmp, mwep)
                 && dist2(mtmp->mx, mtmp->my, mtarg->mx, mtarg->my)
                    > PET_MISSILE_RANGE2)
-                return MM_MISS; /* Out of range */
+                return M_ATTK_MISS; /* Out of range */
             /* Set target monster */
             gm.mtarget = mtarg;
             gm.marcher = mtmp;
             monshoot(mtmp, otmp, mwep); /* multishot shooting or throwing */
             gm.marcher = gm.mtarget = (struct monst *) 0;
             nomul(0);
-            return MM_HIT;
+            return M_ATTK_HIT;
         }
     }
-    return MM_MISS;
+    return M_ATTK_MISS;
 }
 
 /* monster spits substance at monster */
 int
-spitmm(struct monst* mtmp, struct attack* mattk, struct monst* mtarg)
+spitmm(struct monst *mtmp, struct attack *mattk, struct monst *mtarg)
 {
     struct obj *otmp;
 
@@ -835,7 +837,7 @@ spitmm(struct monst* mtmp, struct attack* mattk, struct monst* mtarg)
                 You_hear("a dry rattle nearby.");
             }
         }
-        return MM_MISS;
+        return M_ATTK_MISS;
     }
     if (m_lined_up(mtarg, mtmp)) {
         boolean utarg = (mtarg == &gy.youmonst);
@@ -861,7 +863,7 @@ spitmm(struct monst* mtmp, struct attack* mattk, struct monst* mtarg)
                 gm.mtarget = mtarg;
             m_throw(mtmp, mtmp->mx, mtmp->my, sgn(gt.tbx), sgn(gt.tby),
                     distmin(mtmp->mx,mtmp->my,tx,ty), otmp);
-            gm.mtarget = (struct monst *)0;
+            gm.mtarget = (struct monst *) 0;
             nomul(0);
 
             /* If this is a pet, it'll get hungry. Minions and
@@ -874,19 +876,19 @@ spitmm(struct monst* mtmp, struct attack* mattk, struct monst* mtarg)
                     dog->hungrytime -= 5;
             }
 
-            return MM_HIT;
+            return M_ATTK_HIT;
         } else {
             obj_extract_self(otmp);
             obfree(otmp, (struct obj *) 0);
         }
     }
-    return MM_MISS;
+    return M_ATTK_MISS;
 }
 
 /* Return the name of a breath weapon. If the player is hallucinating, return
  * a silly name instead.
  * typ is AD_MAGM, AD_FIRE, etc */
-static const char *
+staticfn const char *
 breathwep_name(int typ)
 {
     if (Hallucination)
@@ -897,7 +899,7 @@ breathwep_name(int typ)
 
 /* monster breathes at monster (ranged) */
 int
-breamm(struct monst* mtmp, struct attack* mattk, struct monst* mtarg)
+breamm(struct monst *mtmp, struct attack *mattk, struct monst *mtarg)
 {
     int typ = get_atkdam_type(mattk->adtyp);
 
@@ -911,7 +913,7 @@ breamm(struct monst* mtmp, struct attack* mattk, struct monst* mtarg)
                     You_hear("a cough.");
                 }
             }
-            return MM_MISS;
+            return M_ATTK_MISS;
         }
 
         /* if we've seen the actual resistance, don't bother, or
@@ -919,7 +921,7 @@ breamm(struct monst* mtmp, struct attack* mattk, struct monst* mtarg)
         if (m_seenres(mtmp, cvt_adtyp_to_mseenres(typ))
             || (m_seenres(mtmp, M_SEEN_REFL)
                 && monnear(mtmp, mtmp->mux, mtmp->muy)))
-            return MM_HIT;
+            return M_ATTK_HIT;
 
         if (!mtmp->mspec_used && rn2(3)) {
             if (BZ_VALID_ADTYP(typ)) {
@@ -951,14 +953,14 @@ breamm(struct monst* mtmp, struct attack* mattk, struct monst* mtarg)
                 }
             } else impossible("Breath weapon %d used", typ-1);
         } else
-            return MM_MISS;
+            return M_ATTK_MISS;
     }
-    return MM_HIT;
+    return M_ATTK_HIT;
 }
 
 /* remove an entire item from a monster's inventory; destroy that item */
 void
-m_useupall(struct monst* mon, struct obj* obj)
+m_useupall(struct monst *mon, struct obj *obj)
 {
     extract_from_minvent(mon, obj, TRUE, FALSE);
     obfree(obj, (struct obj *) 0);
@@ -966,7 +968,7 @@ m_useupall(struct monst* mon, struct obj* obj)
 
 /* remove one instance of an item from a monster's inventory */
 void
-m_useup(struct monst* mon, struct obj* obj)
+m_useup(struct monst *mon, struct obj *obj)
 {
     if (obj->quan > 1L) {
         obj->quan--;
@@ -978,7 +980,7 @@ m_useup(struct monst* mon, struct obj* obj)
 
 /* monster attempts ranged weapon attack against player */
 void
-thrwmu(struct monst* mtmp)
+thrwmu(struct monst *mtmp)
 {
     struct obj *otmp, *mwep;
     coordxy x, y;
@@ -1023,7 +1025,7 @@ thrwmu(struct monst* mtmp)
 
         if (canseemon(mtmp)) {
             onm = xname(otmp);
-            pline("%s %s %s.", Monnam(mtmp),
+            pline_xy(mtmp->mx, mtmp->my, "%s %s %s.", Monnam(mtmp),
                   /* "thrusts" or "swings", or "bashes with" if adjacent */
                   mswings_verb(otmp, (rang <= 2) ? TRUE : FALSE),
                   obj_is_pname(otmp) ? the(onm) : an(onm));
@@ -1063,16 +1065,26 @@ thrwmu(struct monst* mtmp)
 
 /* monster spits substance at you */
 int
-spitmu(struct monst* mtmp, struct attack* mattk)
+spitmu(struct monst *mtmp, struct attack *mattk)
 {
     return spitmm(mtmp, mattk, &gy.youmonst);
 }
 
 /* monster breathes at you (ranged) */
 int
-breamu(struct monst* mtmp, struct attack* mattk)
+breamu(struct monst *mtmp, struct attack *mattk)
 {
     return breamm(mtmp, mattk, &gy.youmonst);
+}
+
+/* return TRUE if terrain at x,y blocks linedup checks */
+staticfn boolean
+blocking_terrain(coordxy x, coordxy y)
+{
+    if (!isok(x, y) || IS_ROCK(levl[x][y].typ) || closed_door(x, y)
+        || is_waterwall(x, y) || levl[x][y].typ == LAVAWALL)
+        return TRUE;
+    return FALSE;
 }
 
 /* Move from (ax,ay) to (bx,by), but only if distance is up to BOLT_LIM
@@ -1105,10 +1117,7 @@ linedup_callback(
         do {
             /* <bx,by> is guaranteed to eventually converge with <ax,ay> */
             bx += dx, by += dy;
-            if (!isok(bx, by))
-                return FALSE;
-            if (IS_ROCK(levl[bx][by].typ) || closed_door(bx, by)
-                || is_waterwall(bx, by))
+            if (blocking_terrain(bx, by))
                 return FALSE;
             if ((*fnc)(bx, by))
                 return TRUE;
@@ -1119,10 +1128,10 @@ linedup_callback(
 
 boolean
 linedup(
-    register coordxy ax,
-    register coordxy ay,
-    register coordxy bx,
-    register coordxy by,
+    coordxy ax,
+    coordxy ay,
+    coordxy bx,
+    coordxy by,
     int boulderhandling) /* 0=block, 1=ignore, 2=conditionally block */
 {
     int dx, dy, boulderspots;
@@ -1151,8 +1160,7 @@ linedup(
         do {
             /* <bx,by> is guaranteed to eventually converge with <ax,ay> */
             bx += dx, by += dy;
-            if (IS_ROCK(levl[bx][by].typ) || closed_door(bx, by)
-                || is_waterwall(bx, by))
+            if (blocking_terrain(bx, by))
                 return FALSE;
             if (sobj_at(BOULDER, bx, by))
                 ++boulderspots;
@@ -1164,8 +1172,8 @@ linedup(
     return FALSE;
 }
 
-static int
-m_lined_up(struct monst* mtarg, struct monst* mtmp)
+staticfn int
+m_lined_up(struct monst *mtarg, struct monst *mtmp)
 {
     boolean utarget = (mtarg == &gy.youmonst);
     coordxy tx = utarget ? mtmp->mux : mtarg->mx;
@@ -1187,7 +1195,7 @@ m_lined_up(struct monst* mtarg, struct monst* mtmp)
 
 /* is mtmp in position to use ranged attack on hero? */
 boolean
-lined_up(register struct monst* mtmp)
+lined_up(struct monst *mtmp)
 {
     return m_lined_up(&gy.youmonst, mtmp) ? TRUE : FALSE;
 }
@@ -1196,7 +1204,7 @@ lined_up(register struct monst* mtmp)
 struct obj *
 m_carrying(struct monst *mtmp, int type)
 {
-    register struct obj *otmp;
+    struct obj *otmp;
 
     for (otmp = (mtmp == &gy.youmonst) ? gi.invent : mtmp->minvent; otmp;
          otmp = otmp->nobj)

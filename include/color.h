@@ -1,4 +1,4 @@
-/* NetHack 3.7	color.h	$NHDT-Date: 1596498528 2020/08/03 23:48:48 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.15 $ */
+/* NetHack 3.7	color.h	$NHDT-Date: 1682205020 2023/04/22 23:10:20 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.18 $ */
 /* Copyright (c) Steve Linhart, Eric Raymond, 1989. */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -33,6 +33,11 @@
 /* the tty color setup code.  (IMHO, it should be removed - dean).    */
 #define BRIGHT 8
 
+/* color aliases used in monsters.h and display.c  */
+#define HI_DOMESTIC CLR_WHITE /* for player + pets */
+#define HI_LORD CLR_MAGENTA /* for high-end monsters */
+#define HI_OVERLORD CLR_BRIGHT_MAGENTA /* for few uniques */
+
 /* these can be configured */
 #define HI_OBJ CLR_MAGENTA
 #define HI_METAL CLR_CYAN
@@ -49,11 +54,24 @@
 #define DRAGON_SILVER CLR_BRIGHT_CYAN
 #define HI_ZAP CLR_BRIGHT_BLUE
 
-struct menucoloring {
-    struct nhregex *match;
-    char *origstr;
-    int color, attr;
-    struct menucoloring *next;
+#define NH_BASIC_COLOR  0x1000000
+#define COLORVAL(x) ((x) & 0xFFFFFF)
+
+enum nhcolortype { no_color, nh_color, rgb_color };
+
+struct nethack_color {
+    enum nhcolortype colortyp;
+    int tableindex;
+    int rgbindex;
+    const char *name;
+    const char *hexval;
+    long r, g, b;
 };
 
+typedef struct color_and_attr {
+           int color, attr;
+} color_attr;
+
 #endif /* COLOR_H */
+
+/*color.h*/

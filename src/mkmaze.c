@@ -1,4 +1,4 @@
-/* NetHack 3.7	mkmaze.c	$NHDT-Date: 1648064596 2022/03/23 19:43:16 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.133 $ */
+/* NetHack 3.7	mkmaze.c	$NHDT-Date: 1704830842 2024/01/09 20:07:22 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.158 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Pasi Kallinen, 2018. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -6,25 +6,27 @@
 #include "hack.h"
 #include "sp_lev.h"
 
-static int iswall(coordxy, coordxy);
-static int iswall_or_stone(coordxy, coordxy);
-static boolean is_solid(coordxy, coordxy);
-static int extend_spine(int[3][3], int, int, int);
-static void wall_cleanup(coordxy, coordxy, coordxy, coordxy);
-static boolean okay(coordxy, coordxy, coordxy);
-static void maze0xy(coord *);
-static boolean put_lregion_here(coordxy, coordxy, coordxy, coordxy, coordxy,
+staticfn int iswall(coordxy, coordxy);
+staticfn int iswall_or_stone(coordxy, coordxy);
+staticfn boolean is_solid(coordxy, coordxy);
+staticfn int extend_spine(int[3][3], int, int, int);
+staticfn void wall_cleanup(coordxy, coordxy, coordxy, coordxy);
+staticfn boolean okay(coordxy, coordxy, coordxy);
+staticfn void maze0xy(coord *);
+staticfn boolean put_lregion_here(coordxy, coordxy, coordxy, coordxy, coordxy,
                                 coordxy, xint16, boolean, d_level *);
-static void baalz_fixup(void);
-static void setup_waterlevel(void);
-static void unsetup_waterlevel(void);
-static void check_ransacked(const char *);
-static void migr_booty_item(int, const char *);
-static void migrate_orc(struct monst *, unsigned long);
-static void shiny_orc_stuff(struct monst *);
-static void stolen_booty(void);
-static boolean maze_inbounds(coordxy, coordxy);
-static void maze_remove_deadends(xint16);
+staticfn void baalz_fixup(void);
+staticfn void setup_waterlevel(void);
+staticfn void unsetup_waterlevel(void);
+staticfn void check_ransacked(const char *);
+staticfn void migr_booty_item(int, const char *);
+staticfn void migrate_orc(struct monst *, unsigned long);
+staticfn void shiny_orc_stuff(struct monst *);
+staticfn void stolen_booty(void);
+staticfn boolean maze_inbounds(coordxy, coordxy);
+staticfn void maze_remove_deadends(xint16);
+staticfn void populate_maze(void);
+staticfn boolean is_exclusion_zone(xint16, coordxy, coordxy);
 
 /* adjust a coordinate one step in the specified direction */
 #define mz_move(X, Y, dir) \
@@ -38,7 +40,7 @@ static void maze_remove_deadends(xint16);
         }                                                        \
     } while (0)
 
-static int
+staticfn int
 iswall(coordxy x, coordxy y)
 {
     int type;
@@ -50,7 +52,7 @@ iswall(coordxy x, coordxy y)
             || type == SDOOR || type == IRONBARS);
 }
 
-static int
+staticfn int
 iswall_or_stone(coordxy x, coordxy y)
 {
     /* out of bounds = stone */
@@ -61,7 +63,7 @@ iswall_or_stone(coordxy x, coordxy y)
 }
 
 /* return TRUE if out of bounds, wall or rock */
-static boolean
+staticfn boolean
 is_solid(coordxy x, coordxy y)
 {
     return (boolean) (!isok(x, y) || IS_STWALL(levl[x][y].typ));
@@ -69,24 +71,36 @@ is_solid(coordxy x, coordxy y)
 
 /* set map terrain type, handling lava lit, ice melt timers, etc */
 boolean
-set_levltyp(coordxy x, coordxy y, schar typ)
+set_levltyp(coordxy x, coordxy y, schar newtyp)
 {
-    if (isok(x, y)) {
-        if ((typ < MAX_TYPE) && CAN_OVERWRITE_TERRAIN(levl[x][y].typ)) {
+    if (isok(x, y) && newtyp >= STONE && newtyp < MAX_TYPE) {
+        if (CAN_OVERWRITE_TERRAIN(levl[x][y].typ)) {
+            schar oldtyp = levl[x][y].typ;
             boolean was_ice = (levl[x][y].typ == ICE);
 
-            levl[x][y].typ = typ;
+            levl[x][y].typ = newtyp;
+            /* TODO?
+             *  if oldtyp used flags or horizontal differently from
+             *  from the way newtyp will use them, clear them.
+             */
 
-            if (typ == LAVAPOOL)
+            if (IS_LAVA(newtyp))
                 levl[x][y].lit = 1;
 
-            if (was_ice && typ != ICE)
+            if (was_ice && newtyp != ICE)
                 spot_stop_timers(x, y, MELT_ICE_AWAY);
+            if ((IS_FOUNTAIN(oldtyp) != IS_FOUNTAIN(newtyp))
+                || (IS_SINK(oldtyp) != IS_SINK(newtyp)))
+                count_level_features(); /* level.flags.nfountains,nsinks */
+
             return TRUE;
         }
 #ifdef EXTRA_SANITY_CHECKS
     } else {
-        impossible("set_levltyp(%i,%i,%i) !isok", x, y, typ);
+        impossible("set_levltyp(%d,%d,%d)%s%s",
+                   (int) x, (int) y, (int) newtyp,
+                   !isok(x, y) ? " not isok()" : "",
+                   (newtyp < STONE || newtyp >= MAX_TYPE) ? " bad type" : "");
 #endif /*EXTRA_SANITY_CHECKS*/
     }
     return FALSE;
@@ -99,14 +113,17 @@ set_levltyp_lit(coordxy x, coordxy y, schar typ, schar lit)
     boolean ret = set_levltyp(x, y, typ);
 
     if (ret && isok(x, y)) {
-        /* LAVAPOOL handled in set_levltyp */
-        if ((typ != LAVAPOOL) && (lit != SET_LIT_NOCHANGE)) {
+        if (lit != SET_LIT_NOCHANGE) {
 #ifdef EXTRA_SANITY_CHECKS
             if (lit < SET_LIT_NOCHANGE || lit > 1)
-                impossible("set_levltyp_lit(%i,%i,%i,%i)", x, y, typ, lit);
+                impossible("set_levltyp_lit(%d,%d,%d,%d)",
+                           (int) x, (int) y, (int) typ, (int) lit);
 #endif /*EXTRA_SANITY_CHECKS*/
-            if (lit == SET_LIT_RANDOM)
+            if (IS_LAVA(typ))
+                lit = 1;
+            else if (lit == SET_LIT_RANDOM)
                 lit = rn2(2);
+
             levl[x][y].lit = lit;
         }
     }
@@ -131,7 +148,7 @@ set_levltyp_lit(coordxy x, coordxy y, schar typ, schar lit)
  *              W x W           This would extend a spine from x down.
  *              . W W
  */
-static int
+staticfn int
 extend_spine(int locale[3][3], int wall_there, int dx, int dy)
 {
     int spine, nx, ny;
@@ -163,7 +180,7 @@ extend_spine(int locale[3][3], int wall_there, int dx, int dy)
 }
 
 /* Remove walls totally surrounded by stone */
-static void
+staticfn void
 wall_cleanup(coordxy x1, coordxy y1, coordxy x2, coordxy y2)
 {
     uchar type;
@@ -262,7 +279,7 @@ wallification(coordxy x1, coordxy y1, coordxy x2, coordxy y2)
     fix_wall_spines(x1, y1, x2, y2);
 }
 
-static boolean
+staticfn boolean
 okay(coordxy x, coordxy y, coordxy dir)
 {
     mz_move(x, y, dir);
@@ -274,12 +291,28 @@ okay(coordxy x, coordxy y, coordxy dir)
 }
 
 /* find random starting point for maze generation */
-static void
+staticfn void
 maze0xy(coord *cc)
 {
     cc->x = 3 + 2 * rn2((gx.x_maze_max >> 1) - 1);
     cc->y = 3 + 2 * rn2((gy.y_maze_max >> 1) - 1);
     return;
+}
+
+staticfn boolean
+is_exclusion_zone(xint16 type, coordxy x, coordxy y)
+{
+    struct exclusion_zone *ez = ge.exclusion_zones;
+
+    while (ez) {
+        if (((type == LR_DOWNTELE && (ez->zonetype == LR_DOWNTELE || ez->zonetype == LR_TELE))
+             || (type == LR_UPTELE && (ez->zonetype == LR_UPTELE || ez->zonetype == LR_TELE))
+             || type == ez->zonetype)
+            && within_bounded_area(x, y, ez->lx, ez->ly, ez->hx, ez->hy))
+            return TRUE;
+        ez = ez->next;
+    }
+    return FALSE;
 }
 
 /*
@@ -350,7 +383,7 @@ place_lregion(
     impossible("Couldn't place lregion type %d!", rtype);
 }
 
-static boolean
+staticfn boolean
 put_lregion_here(
     coordxy x, coordxy y,
     coordxy nlx, coordxy nly, coordxy nhx, coordxy nhy,
@@ -360,7 +393,7 @@ put_lregion_here(
 {
     struct monst *mtmp;
 
-    if (bad_location(x, y, nlx, nly, nhx, nhy)) {
+    if (bad_location(x, y, nlx, nly, nhx, nhy) || is_exclusion_zone(rtype, x, y)) {
         if (!oneshot) {
             return FALSE; /* caller should try again */
         } else {
@@ -374,7 +407,7 @@ put_lregion_here(
                     mtmp->mtrapped = 0;
                 deltrap(t);
             }
-            if (bad_location(x, y, nlx, nly, nhx, nhy))
+            if (bad_location(x, y, nlx, nly, nhx, nhy) || is_exclusion_zone(rtype, x, y))
                 return FALSE;
         }
     }
@@ -410,7 +443,7 @@ put_lregion_here(
 /* fix up Baalzebub's lair, which depicts a level-sized beetle;
    its legs are walls within solid rock--regular wallification
    classifies them as superfluous and gets rid of them */
-static void
+staticfn void
 baalz_fixup(void)
 {
     struct monst *mtmp;
@@ -509,6 +542,7 @@ void
 fixup_special(void)
 {
     lev_region *r = gl.lregions;
+    s_level *sp;
     struct d_level lev;
     int x, y;
     struct mkroom *croom;
@@ -532,8 +566,7 @@ fixup_special(void)
                 lev = u.uz;
                 lev.dlevel = atoi(r->rname.str);
             } else {
-                s_level *sp = find_level(r->rname.str);
-
+                sp = find_level(r->rname.str);
                 lev = sp->dlevel;
             }
             /*FALLTHRU*/
@@ -593,8 +626,11 @@ fixup_special(void)
             x = somex(croom);
             y = somey(croom);
             if (goodpos(x, y, (struct monst *) 0, 0)) {
+                int tryct2 = 0;
+
                 otmp = mk_tt_object(STATUE, x, y);
-                while (otmp && (poly_when_stoned(&mons[otmp->corpsenm])
+                while (++tryct2 < 100 && otmp
+                       && (poly_when_stoned(&mons[otmp->corpsenm])
                                 || pm_resistance(&mons[otmp->corpsenm],
                                                  MR_STONE))) {
                     /* set_corpsenm() handles weight too */
@@ -610,8 +646,10 @@ fixup_special(void)
                 mkcorpstat(STATUE, (struct monst *) 0, (struct permonst *) 0,
                            somex(croom), somey(croom), CORPSTAT_NONE);
         if (otmp) {
-            while (pm_resistance(&mons[otmp->corpsenm], MR_STONE)
-                   || poly_when_stoned(&mons[otmp->corpsenm])) {
+            tryct = 0;
+            while (++tryct < 100
+                   && (pm_resistance(&mons[otmp->corpsenm], MR_STONE)
+                       || poly_when_stoned(&mons[otmp->corpsenm]))) {
                 /* set_corpsenm() handles weight too */
                 set_corpsenm(otmp, rndmonnum());
             }
@@ -628,12 +666,15 @@ fixup_special(void)
        stolen_booty();
     }
 
+    if ((sp = Is_special(&u.uz)) != 0 && sp->flags.town) /* Mine Town */
+        gl.level.flags.has_town = 1;
+
     if (gl.lregions)
         free((genericptr_t) gl.lregions), gl.lregions = 0;
     gn.num_lregions = 0;
 }
 
-static void
+staticfn void
 check_ransacked(const char *s)
 {
     /* this kludge only works as long as orctown is minetn-1 */
@@ -643,7 +684,7 @@ check_ransacked(const char *s)
 #define ORC_LEADER 1
 static const char *const orcfruit[] = { "paddle cactus", "dwarven root" };
 
-static void
+staticfn void
 migrate_orc(struct monst *mtmp, unsigned long mflags)
 {
     int nlev, max_depth, cur_depth;
@@ -674,8 +715,8 @@ migrate_orc(struct monst *mtmp, unsigned long mflags)
     migrate_to_level(mtmp, ledger_no(&dest), MIGR_RANDOM, (coord *) 0);
 }
 
-static void
-shiny_orc_stuff(struct monst* mtmp)
+staticfn void
+shiny_orc_stuff(struct monst *mtmp)
 {
     int gemprob, goldprob, otyp;
     struct obj *otmp;
@@ -706,8 +747,8 @@ shiny_orc_stuff(struct monst* mtmp)
     }
 }
 
-static void
-migr_booty_item(int otyp, const char* gang)
+staticfn void
+migr_booty_item(int otyp, const char *gang)
 {
     struct obj *otmp;
 
@@ -717,7 +758,7 @@ migr_booty_item(int otyp, const char* gang)
         Strcpy(ONAME(otmp), gang);
         if (objects[otyp].oc_class == FOOD_CLASS) {
             if (otyp == SLIME_MOLD)
-                otmp->spe = fruitadd((char *) orcfruit[rn2(SIZE(orcfruit))],
+                otmp->spe = fruitadd((char *) ROLL_FROM(orcfruit),
                                      (struct fruit *) 0);
             otmp->quan += (long) rn2(3);
             otmp->owt = weight(otmp);
@@ -725,7 +766,7 @@ migr_booty_item(int otyp, const char* gang)
     }
 }
 
-static void
+staticfn void
 stolen_booty(void)
 {
     char *gang, gang_name[BUFSZ];
@@ -819,7 +860,7 @@ stolen_booty(void)
 
 #undef ORC_LEADER
 
-static boolean
+staticfn boolean
 maze_inbounds(coordxy x, coordxy y)
 {
     return (x >= 2 && y >= 2
@@ -829,7 +870,7 @@ maze_inbounds(coordxy x, coordxy y)
             && isok(x, y));
 }
 
-static void
+staticfn void
 maze_remove_deadends(xint16 typ)
 {
     char dirok[4];
@@ -974,18 +1015,21 @@ pick_vibrasquare_location(void)
     coordxy x, y;
     stairway *stway;
     int trycnt = 0;
+    /* these are also defined in mklev.c and they may not be appropriate
+       for mazes with corridors wider than 1 or for cavernous levels */
 #define x_maze_min 2
 #define y_maze_min 2
-/*
- * Pick a position where the stairs down to Moloch's Sanctum
- * level will ultimately be created.  At that time, an area
- * will be altered:  walls removed, moat and traps generated,
- * boulders destroyed.  The position picked here must ensure
- * that that invocation area won't extend off the map.
- *
- * We actually allow up to 2 squares around the usual edge of
- * the area to get truncated; see mkinvokearea(mklev.c).
- */
+
+    /*
+     * Pick a position where the stairs down to Moloch's Sanctum
+     * level will ultimately be created.  At that time, an area
+     * will be altered:  walls removed, moat and traps generated,
+     * boulders destroyed.  The position picked here must ensure
+     * that that invocation area won't extend off the map.
+     *
+     * We actually allow up to 2 squares around the usual edge of
+     * the area to get truncated; see mkinvokearea(mklev.c).
+     */
 #define INVPOS_X_MARGIN (6 - 2)
 #define INVPOS_Y_MARGIN (5 - 2)
 #define INVPOS_DISTANCE 11
@@ -1019,10 +1063,40 @@ pick_vibrasquare_location(void)
 #undef y_maze_min
 }
 
+/* add objects and monsters to random maze */
+staticfn void
+populate_maze(void)
+{
+    int i;
+    coord mm;
+
+    for (i = rn1(8, 11); i; i--) {
+        mazexy(&mm);
+        (void) mkobj_at(rn2(2) ? GEM_CLASS : RANDOM_CLASS, mm.x, mm.y, TRUE);
+    }
+    for (i = rn1(10, 2); i; i--) {
+        mazexy(&mm);
+        (void) mksobj_at(BOULDER, mm.x, mm.y, TRUE, FALSE);
+    }
+    for (i = rn2(3); i; i--) {
+        mazexy(&mm);
+        (void) makemon(&mons[PM_MINOTAUR], mm.x, mm.y, NO_MM_FLAGS);
+    }
+    for (i = rn1(5, 7); i; i--) {
+        mazexy(&mm);
+        (void) makemon((struct permonst *) 0, mm.x, mm.y, NO_MM_FLAGS);
+    }
+    for (i = rn1(6, 7); i; i--) {
+        mazexy(&mm);
+        (void) mkgold(0L, mm.x, mm.y);
+    }
+    for (i = rn1(6, 7); i; i--)
+        mktrap(0, MKTRAP_MAZEFLAG, (struct mkroom *) 0, (coord *) 0);
+}
+
 void
 makemaz(const char *s)
 {
-    coordxy x;
     char protofile[20];
     s_level *sp = Is_special(&u.uz);
     coord mm;
@@ -1056,6 +1130,7 @@ makemaz(const char *s)
     /* SPLEVTYPE format is "level-choice,level-choice"... */
     if (wizard && *protofile && sp && sp->rndlevs) {
         char *ep = getenv("SPLEVTYPE"); /* not nh_getenv */
+
         if (ep) {
             /* strrchr always succeeds due to code in prior block */
             int len = (int) ((strrchr(protofile, '-') - protofile) + 1);
@@ -1063,6 +1138,7 @@ makemaz(const char *s)
             while (ep && *ep) {
                 if (!strncmp(ep, protofile, len)) {
                     int pick = atoi(ep + len);
+
                     /* use choice only if valid */
                     if (pick > 0 && pick <= (int) sp->rndlevs)
                         Sprintf(protofile + len, "%d", pick);
@@ -1089,7 +1165,7 @@ makemaz(const char *s)
         impossible("Couldn't load \"%s\" - making a maze.", protofile);
     }
 
-    gl.level.flags.is_maze_lev = TRUE;
+    gl.level.flags.is_maze_lev = 1;
     gl.level.flags.corrmaze = !rn2(3);
 
     if (!Invocation_lev(&u.uz) && rn2(2)) {
@@ -1114,28 +1190,7 @@ makemaz(const char *s)
     /* place branch stair or portal */
     place_branch(Is_branchlev(&u.uz), 0, 0);
 
-    for (x = rn1(8, 11); x; x--) {
-        mazexy(&mm);
-        (void) mkobj_at(rn2(2) ? GEM_CLASS : RANDOM_CLASS, mm.x, mm.y, TRUE);
-    }
-    for (x = rn1(10, 2); x; x--) {
-        mazexy(&mm);
-        (void) mksobj_at(BOULDER, mm.x, mm.y, TRUE, FALSE);
-    }
-    for (x = rn2(3); x; x--) {
-        mazexy(&mm);
-        (void) makemon(&mons[PM_MINOTAUR], mm.x, mm.y, NO_MM_FLAGS);
-    }
-    for (x = rn1(5, 7); x; x--) {
-        mazexy(&mm);
-        (void) makemon((struct permonst *) 0, mm.x, mm.y, NO_MM_FLAGS);
-    }
-    for (x = rn1(6, 7); x; x--) {
-        mazexy(&mm);
-        (void) mkgold(0L, mm.x, mm.y);
-    }
-    for (x = rn1(6, 7); x; x--)
-        mktrap(0, MKTRAP_MAZEFLAG, (struct mkroom *) 0, (coord *) 0);
+    populate_maze();
 }
 
 #ifdef MICRO
@@ -1390,15 +1445,25 @@ mkportal(coordxy x, coordxy y, xint16 todnum, xint16 todlevel)
 void
 fumaroles(void)
 {
-    xint16 n;
+    xint16 n, nmax = rn2(3);
+    int sizemin = 5;
     boolean snd = FALSE, loud = FALSE;
 
-    for (n = rn2(3) + 2; n; n--) {
+    if (Is_firelevel(&u.uz)) {
+        nmax++;
+        sizemin += 5;
+    }
+    if (gl.level.flags.temperature > 0) {
+        nmax++;
+        sizemin += 5;
+    }
+
+    for (n = nmax; n; n--) {
         coordxy x = rn1(COLNO - 4, 3);
         coordxy y = rn1(ROWNO - 4, 3);
 
         if (levl[x][y].typ == LAVAPOOL) {
-            NhRegion *r = create_gas_cloud(x, y, rn1(30, 20), rn1(10, 5));
+            NhRegion *r = create_gas_cloud(x, y, rn1(10, sizemin), rn1(10, 5));
 
             clear_heros_fault(r);
             snd = TRUE;
@@ -1423,16 +1488,16 @@ fumaroles(void)
 #define gbxmax (gx.xmax - 1)
 #define gbymax (gy.ymax - 1)
 
-static void set_wportal(void);
-static void mk_bubble(coordxy, coordxy, int);
-static void mv_bubble(struct bubble *, coordxy, coordxy, boolean);
+staticfn void set_wportal(void);
+staticfn void mk_bubble(coordxy, coordxy, int);
+staticfn void mv_bubble(struct bubble *, coordxy, coordxy, boolean);
 
 void
 movebubbles(void)
 {
-    static const struct rm water_pos = { cmap_to_glyph(S_water), WATER, 0, 0,
-                                         0, 0, 0, 0, 0, 0 };
-    static const struct rm air_pos = { cmap_to_glyph(S_cloud), AIR, 0, 0, 0,
+    static const struct rm water_pos = { cmap_b_to_glyph(S_water), WATER, 0,
+                                         0, 0, 0, 0, 0, 0, 0 };
+    static const struct rm air_pos = { cmap_b_to_glyph(S_cloud), AIR, 0, 0, 0,
                                        1, 0, 0, 0, 0 };
     static boolean up = FALSE;
     struct bubble *b;
@@ -1608,7 +1673,7 @@ water_friction(void)
 }
 
 void
-save_waterlevel(NHFILE* nhfp)
+save_waterlevel(NHFILE *nhfp)
 {
     struct bubble *b;
 
@@ -1683,7 +1748,7 @@ restore_waterlevel(NHFILE *nhfp)
     }
 }
 
-static void
+staticfn void
 set_wportal(void)
 {
     /* there better be only one magic portal on water level... */
@@ -1693,7 +1758,7 @@ set_wportal(void)
     impossible("set_wportal(): no portal!");
 }
 
-static void
+staticfn void
 setup_waterlevel(void)
 {
     int typ, glyph;
@@ -1741,7 +1806,7 @@ setup_waterlevel(void)
             mk_bubble(x, y, rn2(7));
 }
 
-static void
+staticfn void
 unsetup_waterlevel(void)
 {
     struct bubble *b, *bb;
@@ -1754,7 +1819,7 @@ unsetup_waterlevel(void)
     gb.bbubbles = ge.ebubbles = (struct bubble *) 0;
 }
 
-static void
+staticfn void
 mk_bubble(coordxy x, coordxy y, int n)
 {
     /*
@@ -1817,8 +1882,8 @@ mk_bubble(coordxy x, coordxy y, int n)
  * in the immediate neighborhood of one, he/she may get sucked inside.
  * This property also makes leaving a bubble slightly difficult.
  */
-static void
-mv_bubble(struct bubble* b, coordxy dx, coordxy dy, boolean ini)
+staticfn void
+mv_bubble(struct bubble *b, coordxy dx, coordxy dy, boolean ini)
 {
     int i, j, colli = 0;
     coordxy x, y;

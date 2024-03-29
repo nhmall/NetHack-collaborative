@@ -58,7 +58,7 @@ public:
 
 	virtual void StartMenu(bool using_WIN_INVEN = false);
         virtual void AddMenu(int glyph, const ANY_P *identifier,
-                             char ch, char gch, int attr,
+                             char ch, char gch, int attr, int clr,
                              const QString& str, unsigned itemflags);
 	virtual void EndMenu(const QString& prompt);
 	virtual int SelectMenu(int how, MENU_ITEM_P **menu_list);
@@ -128,6 +128,7 @@ private:
 	bool isSelected(int row);
         long count(int row);
 
+        void SetTwiAttr(QTableWidgetItem *twi, int color, int attr);
 	void AddRow(int row, const MenuItem& mi);
 	void WidenColumn(int column, int width);
         void PadMenuColumns(bool split_descr);
@@ -179,6 +180,8 @@ private:
 	NetHackQtWindow* actual;
         QWidget *parent;
 
+        static void MenuOrText_too_soon_warning(const char *);
+
 public:
 	NetHackQtMenuOrTextWindow(QWidget *parent = NULL);
 
@@ -193,7 +196,7 @@ public:
 	// Menu
         virtual void StartMenu(bool using_WIN_INVENT = false);
         virtual void AddMenu(int glyph, const ANY_P *identifier,
-                             char ch, char gch, int attr,
+                             char ch, char gch, int attr, int clr,
                              const QString& str, unsigned itemflags);
 	virtual void EndMenu(const QString& prompt);
 	virtual int SelectMenu(int how, MENU_ITEM_P **menu_list);

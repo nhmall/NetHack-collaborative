@@ -7,8 +7,6 @@
 
 /* #define SHELL */    /* nt use of pcsys routines caused a hang */
 
-#define TEXTCOLOR /* Color text */
-
 #define EXEPATH              /* Allow .exe location to be used as HACKDIR */
 #define TRADITIONAL_GLYPHMAP /* Store glyph mappings at level change time */
 
@@ -24,9 +22,9 @@
 #define SYSCF                /* Use a global configuration */
 #define SYSCF_FILE "sysconf" /* Use a file to hold the SYSCF configuration */
 
-#define DUMPLOG      /* Enable dumplog files */
-/*#define DUMPLOG_FILE "nethack-%n-%d.log"*/
-#define DUMPLOG_MSG_COUNT 50
+#ifdef DUMPLOG
+#define DUMPLOG_FILE "%TEMP%/nethack-%n-%d.log"
+#endif
 
 /*#define CHANGE_COLOR*/ /* allow palette changes */
 
@@ -101,12 +99,7 @@ extern char *windows_exepath(void);
  */
 
 #ifdef __MINGW32__
-#if 0
 #define MD_USE_TMPFILE_S
-#if !defined(__cplusplus)
-extern errno_t tmpfile_s(FILE * restrict * restrict streamptr);
-#endif
-#endif
 #
 #ifdef strncasecmp
 #undef strncasecmp
@@ -264,9 +257,6 @@ open(const char _FAR *__path, int __access, ... /*unsigned mode*/);
 long _RTLENTRY _EXPFUNC lseek(int __handle, long __offset, int __fromwhere);
 int _RTLENTRY _EXPFUNC read(int __handle, void _FAR *__buf, unsigned __len);
 #endif
-#ifndef CURSES_GRAPHICS
-#include <conio.h>      /* conflicting definitions with curses.h */
-#endif
 #undef kbhit /* Use our special NT kbhit */
 #define kbhit (*nt_kbhit)
 
@@ -292,7 +282,7 @@ ATTRNORETURN extern void nethack_exit(int) NORETURN;
 extern boolean file_exists(const char *);
 extern boolean file_newer(const char *, const char *);
 #ifndef SYSTEM_H
-#include "system.h"
+/* #include "system.h" */
 #endif
 
 /* Override the default version of nhassert.  The default version is unable

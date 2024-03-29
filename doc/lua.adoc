@@ -321,6 +321,7 @@ Example:
 === peek_timer_at
 
 When does timer at location at x,y trigger?
+See <<_timer_types>>.
 
 Example:
 
@@ -331,10 +332,12 @@ Example:
 === pline
 
 Show the text in the message area.
+Second parameter is an optional boolean; if true, force a `--more--` prompt.
 
 Example:
 
  nh.pline("Message text to show.");
+ nh.pline("Waiting for user.", true);
 
 
 === pushkey
@@ -397,6 +400,7 @@ Example:
 === start_timer_at
 
 Start a timer at location x,y, with trigger time of `when` - relative to current turn.
+See <<_timer_types>>.
 
 Example:
 
@@ -407,6 +411,7 @@ Example:
 === stop_timer_at
 
 Stop a timer at location x,y.
+See <<_timer_types>>.
 
 Example:
 
@@ -523,12 +528,27 @@ Example:
  des.engraving({x,y}, "engrave", "Foo");
 
 
+=== exclusion
+
+Exclude an area of the map from being randomly chosen target when
+falling or teleporting into the level.  Multiple exclusions per level are allowed.
+
+* type is one of "teleport", "teleport-up", or "teleport-down".
+
+Example:
+
+ des.exclusion({ type = "teleport", region = { 0,0, 10,5 } });
+
+
 === feature
 
 Create a feature, and set flags for it.
 Valid features are a fountain, a sink, a pool, a throne, or a tree.
 Throne has `looted` flag, tree has `looted` and `swarm`, fountain has `looted` and `warned`,
 sink has `pudding`, `dishwasher`, and `ring`.
+If passed with no coordinates, it will be placed in a random normal-floor spot
+in the enclosing room or region if one exists, or a random normal-floor spot
+anywhere on the level if one does not exist.
 
 Example:
 
@@ -547,6 +567,21 @@ Only used for testing purposes. See also <<_reset_level>>.
 Example:
 
  des.finalize_level();
+
+
+=== gas_cloud
+
+Create a gas cloud.
+The `damage` and `ttl` fields are optional.
+Defaults to non-poisonous and infinite lifetime.
+
+Example:
+
+ des.gas_cloud({ x = XX, y = YY });
+ des.gas_cloud({ coord = { XX, YY } });
+ des.gas_cloud({ selection = SEL });
+ des.gas_cloud({ selection = SEL, damage = 5 });
+ des.gas_cloud({ selection = SEL, damage = 5, ttl = 200 });
 
 
 === gold
@@ -604,6 +639,7 @@ Set flags for this level.
 | icedpools     | Ice generated with the level will be treated as frozen pools instead of frozen moats.
 | corrmaze      |
 | premapped     | Map, including traps and boulders, is revealed on entrance.
+| sokoban       | Level has special Sokoban rules
 | solidify      | Areas outside the specified level map are made undiggable and unphaseable.
 | inaccessibles | If inaccessible areas are generated, generate ways for them to connect to the "accessible" area.
 | noflip        | Prevent flipping the level.
@@ -614,6 +650,8 @@ Set flags for this level.
 | temperate     | Level is neither hot nor cold.
 | nomongen      | Prevents random monster generation.
 | nodeathdrops  | Prevents killed monsters from dropping corpses or random death drops.
+| fumaroles     | Lava emits poison gas clouds at random.
+| stormy        | Clouds create lightning bolts at random.
 |===
 
 Example:
@@ -782,7 +820,8 @@ Example:
 
 === object
 
-Create an object. The table parameter accepts the following:
+Create an object. Returns the object as an <<Obj>> class.
+The table parameter accepts the following:
 
 [options="header"]
 |===
@@ -824,6 +863,7 @@ Example:
  des.object({ class = "%" });
  des.object({ id = "boulder", x = 03, y = 12});
  des.object({ id = "chest", coord = {03, 12}, locked = true, contents = function(obj) des.object("rock"); end });
+ local o = des.object();
 
 
 === random_corridors
@@ -840,7 +880,7 @@ Example:
 Create a room region, which can be irregular; use the boundary <<_map_characters,map character>> to restrict the floodfilled area.
 
 If using the first form with a selection and "lit", the lit area will extend
-outward 1 space from the selection to attempt to accomodate adjacent walls,
+outward 1 space from the selection to attempt to accommodate adjacent walls,
 regardless of whether they are actually walls or not. If using "unlit", this
 will not happen.
 
@@ -1398,6 +1438,7 @@ Example:
 === has_timer
 
 Does object have an attached timer of certain type?
+See <<_timer_types>>.
 
 Example:
 
@@ -1408,6 +1449,7 @@ Example:
 
 Peek at an object timer. Returns the turn when timer triggers.
 Returns 0 if no such timer attached to the object.
+See <<_timer_types>>.
 
 Example:
 
@@ -1419,7 +1461,7 @@ Example:
 Stop object timer(s). Return the turn when timer would have triggered.
 Returns 0 if no such timer was attached to the object.
 Without a timer type parameters, stops all timers for the object,
-and returns nothing.
+and returns nothing. See <<_timer_types>>.
 
 Example:
 
@@ -1429,7 +1471,7 @@ Example:
 
 === start_timer
 
-Start an object timer.
+Start an object timer. See <<_timer_types>>.
 
 Example:
 
@@ -1487,4 +1529,21 @@ These constants are in the `nhc` table.
 | COLNO | Number of map columns
 | ROWNO | Number of map rows
 | DLB   | 1 or 0, depending if NetHack is compiled with DLB
+|===
+
+
+== Timer types
+
+[%header, cols="20%,10%,70%"]
+|===
+| Name          | Type | Description
+| rot-organic   | obj  | non-corpse object rotting away
+| rot-corpse    | obj  | corpse object rotting away
+| revive-mon    | obj  | monster corpse revival
+| zombify-mon   | obj  | monster corpse rising as a zombie
+| burn-obj      | obj  | light-source object is lit
+| hatch-egg     | obj  | egg hatching
+| fig-transform | obj  | cursed figurine automatical transform
+| shrink-glob   | obj  | glob object shrinking away
+| melt-ice      | map  | ice at map location melts
 |===

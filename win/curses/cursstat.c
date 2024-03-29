@@ -37,9 +37,7 @@ static void curs_HPbar(char *, int);
 static void curs_stat_conds(int, int, int *, int *, char *, boolean *);
 static void curs_vert_status_vals(int);
 #ifdef STATUS_HILITES
-#ifdef TEXTCOLOR
 static int condcolor(long, unsigned long *);
-#endif
 static int condattr(long, unsigned long *);
 static int nhattr2curses(int);
 #endif /* STATUS_HILITES */
@@ -152,7 +150,7 @@ curses_status_update(
 
     if (fldidx != BL_FLUSH) {
         if (fldidx < 0 || fldidx >= MAXBLSTATS) {
-            gc.context.botlx = gc.context.botl = FALSE; /* avoid bot() */
+            /* panic immediately sets gb.bot_disabled to avoid bot() */
             panic("curses_status_update(%d)", fldidx);
         }
         changed_fields |= (1 << fldidx);
@@ -163,9 +161,6 @@ curses_status_update(
             curses_condition_bits = *condptr;
             curses_colormasks = colormasks;
         } else {
-#ifndef TEXTCOLOR
-            color_and_attr = (color_and_attr & ~0x00FF) | NO_COLOR;
-#endif
             /*
              * status_vals[] are used for horizontal orientation
              *  (wide lines of multiple short values).
@@ -256,12 +251,12 @@ draw_horizontal(boolean border)
     /* almost all fields already come with a leading space;
        "xspace" indicates places where we'll generate an extra one */
     static const enum statusfields
-    twolineorder[3][15] = {
+    twolineorder[3][16] = {
         { BL_TITLE,
           /*xspace*/ BL_STR, BL_DX, BL_CO, BL_IN, BL_WI, BL_CH,
           /*xspace*/ BL_ALIGN,
           /*xspace*/ BL_SCORE,
-          BL_FLUSH, blPAD, blPAD, blPAD, blPAD, blPAD },
+          BL_FLUSH, blPAD, blPAD, blPAD, blPAD, blPAD, blPAD },
         { BL_LEVELDESC,
           /*xspace*/ BL_GOLD,
           /*xspace*/ BL_HP, BL_HPMAX,
@@ -269,16 +264,16 @@ draw_horizontal(boolean border)
           /*xspace*/ BL_AC,
           /*xspace*/ BL_XP, BL_EXP, BL_HD,
           /*xspace*/ BL_TIME,
-          /*xspace*/ BL_HUNGER, BL_CAP, BL_CONDITION,
+          /*xspace*/ BL_HUNGER, BL_CAP, BL_CONDITION, BL_VERS,
           BL_FLUSH },
         { BL_FLUSH, blPAD, blPAD, blPAD, blPAD, blPAD, blPAD, blPAD,
-          blPAD, blPAD, blPAD, blPAD, blPAD, blPAD, blPAD }
+          blPAD, blPAD, blPAD, blPAD, blPAD, blPAD, blPAD, blPAD }
     },
-    threelineorder[3][15] = { /* moves align to line 2, leveldesc+ to 3 */
+    threelineorder[3][16] = { /* moves align to line 2, leveldesc+ to 3 */
         { BL_TITLE,
           /*xspace*/ BL_STR, BL_DX, BL_CO, BL_IN, BL_WI, BL_CH,
           /*xspace*/ BL_SCORE,
-          BL_FLUSH, blPAD, blPAD, blPAD, blPAD, blPAD, blPAD },
+          BL_FLUSH, blPAD, blPAD, blPAD, blPAD, blPAD, blPAD, blPAD },
         { BL_ALIGN,
           /*xspace*/ BL_GOLD,
           /*xspace*/ BL_HP, BL_HPMAX,
@@ -286,14 +281,15 @@ draw_horizontal(boolean border)
           /*xspace*/ BL_AC,
           /*xspace*/ BL_XP, BL_EXP, BL_HD,
           /*xspace*/ BL_HUNGER, BL_CAP,
-          BL_FLUSH, blPAD, blPAD },
+          BL_FLUSH, blPAD, blPAD, blPAD },
         { BL_LEVELDESC,
           /*xspace*/ BL_TIME,
           /*xspecial*/ BL_CONDITION,
+          /*xspecial*/ BL_VERS,
           BL_FLUSH, blPAD, blPAD, blPAD, blPAD, blPAD, blPAD, blPAD,
           blPAD, blPAD, blPAD, blPAD }
     };
-    const enum statusfields (*fieldorder)[15];
+    const enum statusfields (*fieldorder)[16];
     coordxy spacing[MAXBLSTATS], valline[MAXBLSTATS];
     enum statusfields fld, prev_fld;
     char *text, *p, cbuf[BUFSZ], ebuf[STATVAL_WIDTH];
@@ -302,11 +298,11 @@ draw_horizontal(boolean border)
     char sbuf[STATVAL_WIDTH];
 #endif
     int i, j, number_of_lines,
-        cap_and_hunger, exp_points, sho_score,
+        cap_and_hunger, exp_points, sho_score, sho_vers,
         /* both height and width get their values set,
          * but only width gets used in this function */
-        height UNUSED, width, w, xtra, clen, x, y, t, ex, ey,
-        condstart = 0, conddummy = 0;
+        height, width, w, xtra, clen, x, y, t, ex, ey,
+        condstart = 0, conddummy = 0, versstart = 0;
 #ifdef STATUS_HILITES
     int coloridx = NO_COLOR, attrmask = 0;
 #endif /* STATUS_HILITES */
@@ -362,6 +358,10 @@ draw_horizontal(boolean border)
     exp_points = (flags.showexp ? 1 : 0);
     /* don't bother conditionalizing this; always 0 for !SCORE_ON_BOTL */
     sho_score = (status_activefields[BL_SCORE] != 0);
+    sho_vers = (status_activefields[BL_VERS] != 0);
+    versstart = sho_vers ? (width - (int) strlen(status_vals[BL_VERS])
+                            + (border ? 1 : 0))
+                         : 0;
 
     /* simplify testing which fields reside on which lines; assume line #0 */
     (void) memset((genericptr_t) valline, 0, sizeof valline);
@@ -428,6 +428,7 @@ draw_horizontal(boolean border)
                 text = cbuf; /* for 'w += strlen(text)' below */
                 spacing[fld] = (cap_and_hunger == 0);
                 break;
+            case BL_VERS:
             case BL_STR:
             case BL_HP:
             case BL_ENE:
@@ -578,6 +579,11 @@ draw_horizontal(boolean border)
 
             } else if (fld != BL_CONDITION) {
                 /* regular field, including title if no hitpointbar */
+                if (fld == BL_VERS) {
+                    getyx(win, y, x);
+                    if (x < versstart)
+                        wmove(win, y, versstart); /* right justify */
+                }
 #ifdef STATUS_HILITES
                 coloridx = curses_status_colors[fld]; /* includes attribute */
                 if (iflags.hilite_delta && coloridx != NO_COLOR) {
@@ -591,11 +597,9 @@ draw_horizontal(boolean border)
                         attrmask = nhattr2curses(attrmask);
                         wattron(win, attrmask);
                     }
-#ifdef TEXTCOLOR
                     coloridx &= 0x00FF;
                     if (coloridx != NO_COLOR && coloridx != CLR_MAX)
                         curses_toggle_color_attr(win, coloridx, NONE, ON);
-#endif
                 }
 #endif /* STATUS_HILITES */
 
@@ -603,10 +607,8 @@ draw_horizontal(boolean border)
 
 #ifdef STATUS_HILITES
                 if (iflags.hilite_delta) {
-#ifdef TEXTCOLOR
                     if (coloridx != NO_COLOR)
                         curses_toggle_color_attr(win, coloridx, NONE, OFF);
-#endif
                     if (attrmask)
                         wattroff(win, attrmask);
                 }
@@ -624,6 +626,14 @@ draw_horizontal(boolean border)
                         y = j + (border ? 1 : 0);
                     /* cbuf[] was populated above; clen is its length */
                     if (number_of_lines == 3) {
+                        int vlen = (sho_vers
+                                    && fieldorder[j][i + 1] == BL_VERS)
+                                   ? ((int) strlen(status_vals[BL_VERS])
+                                      + spacing[BL_VERS])
+                                   : 0;
+
+                        clen += vlen; /* when aligning conditions, treat
+                                       * version as if an added condition */
                         /*
                          * For 3-line status, align conditions with hunger
                          * (or where it would have been, when not shown),
@@ -641,6 +651,7 @@ draw_horizontal(boolean border)
                             else
                                 wmove(win, y, width + (border ? 1 : 0) - clen);
                         }
+                        clen -= vlen;
                     }
                     /* 'asis' was set up by first curs_stat_conds() call
                        above; True means that none of the conditions
@@ -661,6 +672,7 @@ draw_horizontal(boolean border)
         } /* i (fld) */
         wclrtoeol(win); /* [superfluous? draw_status() calls werase()] */
     } /* j (line) */
+    nhUse(height);
     return;
 }
 
@@ -672,31 +684,34 @@ draw_vertical(boolean border)
        removed if we need to shrink to fit within height limit (very rare) */
     static const enum statusfields fieldorder[] = {
         BL_TITLE, /* might be overlaid by hitpoint bar */
-        /* 4:blank */
+        /* 5:blank */
         BL_HP, BL_HPMAX,
         BL_ENE, BL_ENEMAX,
         BL_AC,
-        /* 3:blank */
+        /* 4:blank */
         BL_LEVELDESC,
         BL_ALIGN,
         BL_XP, BL_EXP, BL_HD,
         BL_GOLD,
-        /* 2:blank (but only if time or score or both enabled) */
+        /* 3:blank (but only if time or score or both enabled) */
         BL_TIME,
         BL_SCORE,
-        /* 1:blank */
+        /* 2:blank */
         BL_STR, BL_DX, BL_CO, BL_IN, BL_WI, BL_CH,
-        /* 5:blank (if any of hunger, encumbrance, or conditions appear) */
+        /* 6:blank (if any of hunger, encumbrance, or conditions appear) */
         BL_HUNGER, BL_CAP, /* these two are shown on same line */
         BL_CONDITION, /* shown three per line so may take up to four lines */
+        /* 1:blank (bottom justified) */
+        BL_VERS,
         BL_FLUSH
     };
     static const enum statusfields shrinkorder[] = {
-         BL_STR, BL_SCORE, BL_TIME, BL_LEVELDESC, BL_HP,
+         BL_VERS, BL_STR, BL_SCORE, BL_TIME, BL_LEVELDESC, BL_HP,
          BL_CONDITION, BL_CAP, BL_HUNGER
     };
     coordxy spacing[MAXBLSTATS];
-    int i, fld, cap_and_hunger, time_and_score, cond_count, per_line;
+    int i, fld, cap_and_hunger, time_and_score, cond_count,
+        sho_vers, per_line;
     char *text;
 #ifdef STATUS_HILITES
     char *p = 0, savedch = '\0';
@@ -738,6 +753,7 @@ draw_vertical(boolean border)
                 ++cond_count;
     }
     per_line = 2; /* will be changed to 3 if status becomes too tall */
+    sho_vers = (status_activefields[BL_VERS] ? 1 : 0);
 
     /* count how many lines we'll need; we normally space several groups of
        fields with blank lines but might need to compress some of those out */
@@ -762,7 +778,7 @@ draw_vertical(boolean border)
             /* unlike hunger+cap, score is shown on separate line from time;
                needs time+score separator if time is inactive */
             spacing[fld] = (time_and_score == 2) ? 2
-                           : (time_and_score & 1) ? 1 : 0;
+                           : (time_and_score == 3) ? 1 : 0;
             break;
         case BL_HUNGER:
             /* separated from characteristics unless blank */
@@ -782,6 +798,9 @@ draw_vertical(boolean border)
             if (cond_count > per_line)
                 height_needed += (cond_count - 1) / per_line;
             break;
+        case BL_VERS:
+            spacing[fld] = sho_vers ? 2 : 0;
+            break;
         case BL_XP:
         case BL_HD:
         default:
@@ -794,9 +813,9 @@ draw_vertical(boolean border)
     if (height_needed > height) {
         /* if there are a lot of status conditions, compress them first */
         if (per_line == 2 && cond_count > per_line) {
-             height_needed -= (cond_count - 1) / per_line;
-             per_line = 3;
-             height_needed += (cond_count - 1) / per_line;
+            height_needed -= (cond_count - 1) / per_line;
+            per_line = 3;
+            height_needed += (cond_count - 1) / per_line;
         }
         if (height_needed > height) {
             for (i = 0; i < SIZE(shrinkorder); ++i) {
@@ -811,7 +830,7 @@ draw_vertical(boolean border)
 #ifdef SCORE_ON_BOTL
         /* with all optional fields and every status condition (12 out
            of the 13 since two are mutually exclusive) active, we need
-           21 non-blank lines; curses_create_main_windows() used to
+           22 non-blank lines; curses_create_main_windows() used to
            require 24 lines or more in order to enable vertical status,
            but that has been relaxed to 20 so height_needed might still
            be too high after suppressing all the blank lines */
@@ -819,11 +838,18 @@ draw_vertical(boolean border)
             height_needed -= spacing[BL_SCORE];
             spacing[BL_SCORE] = 0;
             time_and_score &= ~2;
-            /* height_needed isn't used beyond here but we keep it accurate */
-            nhUse(height_needed);
         }
 #endif
+    } else if (height_needed < height) {
+        if (sho_vers) {
+            /* bottom justify 'version' */
+            spacing[BL_VERS] += height - height_needed; /* 2 + (h - h') */
+            height_needed = height;
+        }
     }
+    /* height_needed isn't used beyond here but was updated (for BL_SCORE
+       or BL_VERS) to keep it accurate in case that changes someday */
+    nhUse(height_needed);
 
     if (border)
         x++, y++;
@@ -837,9 +863,8 @@ draw_vertical(boolean border)
             continue;
 
         if (spacing[fld]) {
-            wmove(win, y++, x); /* move to next line */
-            if (spacing[fld] == 2)
-                 wmove(win, y++, x); /* skip a line */
+            y += spacing[fld];
+            wmove(win, y - 1, x); /* move to next (or further) line */
         }
 
         if (fld == BL_TITLE && iflags.wc2_hitpointbar) {
@@ -888,11 +913,9 @@ draw_vertical(boolean border)
                     attrmask = nhattr2curses(attrmask);
                     wattron(win, attrmask);
                 }
-#ifdef TEXTCOLOR
                 coloridx &= 0x00FF;
                 if (coloridx != NO_COLOR && coloridx != CLR_MAX)
                     curses_toggle_color_attr(win, coloridx, NONE, ON);
-#endif
             } /* highlighting active */
 #endif /* STATUS_HILITES */
 
@@ -900,10 +923,8 @@ draw_vertical(boolean border)
 
 #ifdef STATUS_HILITES
             if (iflags.hilite_delta) {
-#ifdef TEXTCOLOR
                 if (coloridx != NO_COLOR)
                     curses_toggle_color_attr(win, coloridx, NONE, OFF);
-#endif
                 if (attrmask)
                     wattroff(win, attrmask);
             } /* resume normal rendition */
@@ -916,7 +937,7 @@ draw_vertical(boolean border)
         } else {
             /* status conditions */
             if (cond_count) {
-                /* output active conditions; usually two per line, but
+                /* output active conditions; usually two per line, but if
                    window isn't tall enough, it's increased to three per line;
                    cursor is already positioned where they should start */
                 curs_stat_conds(1, per_line, &x, &y,
@@ -933,9 +954,7 @@ curs_HPbar(char *text, /* pre-padded with trailing spaces if short */
            int bar_len) /* width of space within the brackets */
 {
 #ifdef STATUS_HILITES
-#ifdef TEXTCOLOR
     int coloridx = 0;
-#endif
 #endif /* STATUS_HILITES */
     int k, bar_pos;
     char bar[STATVAL_WIDTH], *bar2 = (char *) 0, savedch = '\0';
@@ -965,25 +984,21 @@ curs_HPbar(char *text, /* pre-padded with trailing spaces if short */
         /* fixed attribute, not nhattr2curses((hpbar_color >> 8) & 0x00FF) */
         wattron(win, A_REVERSE); /* do this even if hilite_delta is 0 */
 #ifdef STATUS_HILITES
-#ifdef TEXTCOLOR
         if (iflags.hilite_delta) {
             coloridx = hpbar_color & 0x00FF;
             if (coloridx != NO_COLOR)
                 curses_toggle_color_attr(win, coloridx, NONE, ON);
         }
-#endif
 #endif /* STATUS_HILITES */
 
         /* portion of title corresponding to current hit points */
         waddstr(win, bar);
 
 #ifdef STATUS_HILITES
-#ifdef TEXTCOLOR
         if (iflags.hilite_delta) {
             if (coloridx != NO_COLOR)
                 curses_toggle_color_attr(win, coloridx, NONE, OFF);
         }
-#endif
 #endif /* STATUS_HILITES */
         wattroff(win, A_REVERSE); /* do this even if hilite_delta is 0 */
     } /* *bar (current HP > 0) */
@@ -1006,7 +1021,7 @@ DISABLE_WARNING_FORMAT_NONLITERAL
 static void
 curs_stat_conds(
     int vert_cond,     /* 0 => horizontal, 1 => vertical */
-    int per_line,      /* for vertical number of conditions per line */
+    int per_line,      /* for vertical, number of conditions per line */
     int *x, int *y,    /* real for vertical, ignored otherwise */
     char *condbuf,     /* optional output; collect string of conds */
     boolean *nohilite) /* optional output; indicates whether -*/
@@ -1088,11 +1103,9 @@ curs_stat_conds(
                         attrmask = nhattr2curses(attrmask);
                         wattron(win, attrmask);
                     }
-#ifdef TEXTCOLOR
                     if ((color = condcolor(bitmsk, curses_colormasks))
                         != NO_COLOR)
                         curses_toggle_color_attr(win, color, NONE, ON);
-#endif
                 }
 #endif /* STATUS_HILITES */
 
@@ -1101,16 +1114,14 @@ curs_stat_conds(
 
 #ifdef STATUS_HILITES
                 if (iflags.hilite_delta) {
-#ifdef TEXTCOLOR
                     if (color != NO_COLOR)
                         curses_toggle_color_attr(win, color, NONE, OFF);
-#endif
                     if (attrmask)
                         wattroff(win, attrmask);
                 }
 #endif /* STATUS_HILITES */
                 /* if that was #3 of 3 advance to next line */
-                if (do_vert && (++vert_cond % per_line) == 1)
+                if (do_vert && cond_bits && (++vert_cond % per_line) == 1)
                     wmove(win, (*y)++, *x);
             } /* if cond_bits & bitmask */
         } /* for i */
@@ -1212,6 +1223,7 @@ curs_vert_status_vals(int win_width)
                     Sprintf(leadingspace, "%*s",
                             (hp_width + 3) - fld_width, " ");
                 /*FALLTHRU*/
+            case BL_VERS:
             case BL_EXP:
             case BL_HUNGER:
             case BL_CAP:
@@ -1225,8 +1237,19 @@ curs_vert_status_vals(int win_width)
                 Sprintf(status_vals_long[fldidx], "%*.*s: %s%s",
                         -lbl_width, lbl_width, lbl, leadingspace, text);
                 *status_vals_long[fldidx] = highc(*status_vals_long[fldidx]);
+            } else if (fldidx == BL_VERS && *text) {
+                int txtlen = (int) strlen(text);
+
+                /* right justify without "Version :" prefix; if longer than
+                   width, keep only the *end* of the value */
+                if (txtlen >= win_width)
+                    Strcpy(status_vals_long[BL_VERS],
+                           eos((char *) text) - win_width);
+                else
+                    Sprintf(status_vals_long[BL_VERS],
+                            "%*s%s", win_width - txtlen, " ", text);
             } else if ((fldidx == BL_HUNGER || fldidx == BL_CAP) && *text) {
-                /* hunger and enbumbrance are shown side-by-side in
+                /* hunger and encumbrance are shown side-by-side in
                    a 26 character or wider window; if leading space is
                    present, get rid of it, then add one we're sure about */
                 if (*text == ' ')
@@ -1271,7 +1294,6 @@ curs_vert_status_vals(int win_width)
 }
 
 #ifdef STATUS_HILITES
-#ifdef TEXTCOLOR
 /*
  * Return what color this condition should
  * be displayed in based on user settings.
@@ -1288,7 +1310,6 @@ condcolor(long bm, unsigned long *bmarray)
         }
     return NO_COLOR;
 }
-#endif /* TEXTCOLOR */
 
 static int
 condattr(long bm, unsigned long *bmarray)
@@ -1296,25 +1317,26 @@ condattr(long bm, unsigned long *bmarray)
     int i, attr = 0;
 
     if (bm && bmarray) {
-        for (i = HL_ATTCLR_DIM; i < BL_ATTCLR_MAX; ++i) {
+        for (i = HL_ATTCLR_BOLD; i < BL_ATTCLR_MAX; ++i) {
             if ((bmarray[i] & bm) != 0) {
-                switch (i) {
+                switch(i) {
+                case HL_ATTCLR_BOLD:
+                    attr |= HL_BOLD;
+                    break;
                 case HL_ATTCLR_DIM:
                     attr |= HL_DIM;
                     break;
-                case HL_ATTCLR_BLINK:
-                    attr |= HL_BLINK;
+                case HL_ATTCLR_ITALIC:
+                    attr |= HL_ITALIC;
                     break;
                 case HL_ATTCLR_ULINE:
                     attr |= HL_ULINE;
                     break;
+                case HL_ATTCLR_BLINK:
+                    attr |= HL_BLINK;
+                    break;
                 case HL_ATTCLR_INVERSE:
                     attr |= HL_INVERSE;
-                    break;
-                case HL_ATTCLR_BOLD:
-                    attr |= HL_BOLD;
-                    break;
-                default:
                     break;
                 }
             }
@@ -1331,14 +1353,16 @@ nhattr2curses(int attrmask)
 
     if (attrmask & HL_BOLD)
         result |= A_BOLD;
-    if (attrmask & HL_INVERSE)
-        result |= A_REVERSE;
+    if (attrmask & HL_DIM)
+        result |= A_DIM;
+    if (attrmask & HL_ITALIC)
+        result |= A_ITALIC;
     if (attrmask & HL_ULINE)
         result |= A_UNDERLINE;
     if (attrmask & HL_BLINK)
         result |= A_BLINK;
-    if (attrmask & HL_DIM)
-        result |= A_DIM;
+    if (attrmask & HL_INVERSE)
+        result |= A_REVERSE;
 
     return result;
 }
@@ -1759,7 +1783,7 @@ draw_bar(boolean is_hp, int cur, int max, const char *title)
 }
 
 /* Update the status win - this is called when NetHack would normally
-   write to the status window, so we know somwthing has changed.  We
+   write to the status window, so we know something has changed.  We
    override the write and update what needs to be updated ourselves. */
 void
 curses_update_stats(void)
@@ -2081,7 +2105,7 @@ draw_vertical(int x, int y, int hp, int hpmax)
     wmove(win, y++, x);
     wprintw(win, "%s", dungeons[u.uz.dnum].dname);
 
-    y++; /* Blank line inbetween */
+    y++; /* Blank line in-between */
     wmove(win, y++, x);
 
     /* Attributes. Old  vertical order is preserved */

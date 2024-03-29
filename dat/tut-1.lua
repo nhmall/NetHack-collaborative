@@ -5,22 +5,22 @@ des.level_flags("mazelevel", "noflip",
 
 des.map([[
 ---------------------------------------------------------------------------
-|-.--|.......|....|.......................................................|
-|.-..........|....+.......................................................|
-||.--|.......|....|.......................................................|
-||.|.|.......|....|.......................................................|
-||.|.|.......|....|.......................................................|
-|-+-S-------------|.......................................................|
-|......|          |----------.............................................|
-|......|  ######  |.........|.............................................|
-|----.-| -+-   #  |.....---.|.............................................|
-|----+----.----+---.|.--|.|.|.............................................|
-|........|.|......|.|...F...|.............................................|
-|.P......-S|......|------.---.............................................|
-|..........|......+.|...|.---.............................................|
-|.W......---......|.|.|.|.+...............................................|
-|....Z.L.|.F......|.|.|.|.---.............................................|
-|........|--......|...|.....|.............................................|
+|-.--|.......|......|..S....|.F.......|.............|.....................|
+|.-..........|......|--|....|.F.....|.|S-------.....|.....................|
+||.--|.......|..T......|....|.F.....|.|.......|.....|.....................|
+||.|.|.......|......|-.|....|.F.....|.|.......|.....|.....................|
+||.|.|.......|......||.|-.-----------.-.......|-S----.....................|
+|-+-S---------..---.||........................|...|.......................|
+|......|          |.-------------------.......|...|....--S----............|
+|......|  ######  |.........|      |..S.......|...|....|.....|............|
+|----.-| -+-   #  |.....---.|######+..|.......S...|....|.....|............|
+|----+----.----+---.|.--|.|.|#     ------------...|....|.....|............|
+|........|.|......|.|...F...|#  ........|.....+...|....|.....|............|
+|.P......-S|......|------.---# .........|.....|...|....-------............|
+|..........|......+.|...|.|.S# ..--S-----.....|LLL|.......................|
+|.W......---......|.|.|.|.|.|# ..|......|.....|LLL|.......................|
+|....Z.L.S.F......|.|.|.|.---#   |......+.....|...|.......................|
+|........|--......|...|.....|####+......|.....|...+.......................|
 ---------------------------------------------------------------------------
 ]]);
 
@@ -37,6 +37,7 @@ des.teleport_region({ region = { 9,3, 9,3 } });
 
 -- turn on some newbie-friendly options
 nh.parse_config("OPTIONS=mention_walls");
+nh.parse_config("OPTIONS=mention_decor");
 nh.parse_config("OPTIONS=lit_corridor");
 
 local movekeys = nh.eckey("movewest") .. " " ..
@@ -68,12 +69,12 @@ des.trap({ type = "magic portal", coord = { 4,4 }, seen = true });
 
 --
 
-des.engraving({ coord = { 5,9 }, type = "engrave", text = "This door is locked. Kick it with " .. nh.eckey("kick"), degrade = false });
+des.engraving({ coord = { 5,9 }, type = "engrave", text = "This door is locked. Kick it with '" .. nh.eckey("kick") .. "'", degrade = false });
 des.door({ coord = { 5,10 }, state = "locked" });
 
 --
 
-des.engraving({ coord = { 10,13 }, type = "engrave", text = "Use " .. nh.eckey("search") .. " to search for secret doors", degrade = false });
+des.engraving({ coord = { 10,13 }, type = "engrave", text = "Use '" .. nh.eckey("search") .. "' to search for secret doors", degrade = false });
 
 --
 
@@ -143,20 +144,121 @@ des.trap({ type = "magic portal", coord = { 19,11 }, seen = true });
 
 --
 
-des.door({ coord = { 26,14 }, state = "locked" });
+-- rock fall
+des.object({ coord = {14, 5}, id = "rock", quantity = math.random(50,99) });
+des.object({ coord = {15, 5}, id = "rock", quantity = math.random(10,30) });
+des.object({ coord = {14, 4}, id = "rock", quantity = math.random(10,30) });
+des.object({ coord = {15, 6}, id = "rock", quantity = math.random(30,60) });
+des.object({ coord = {14, 6}, id = "rock", quantity = math.random(30,60) });
+des.object({ coord = {14, 6}, id = "boulder" });
 
-des.engraving({ coord = { 27,14 }, type = "burn", text = "UNDER CONSTRUCTION", degrade = false });
+des.door({ coord = { 20,3 }, state = percent(50) and "open" or "closed" });
+
+des.engraving({ coord = { 21,3 }, type = "engrave", text = "Avoid being burdened, it slows you down", degrade = false });
+des.engraving({ coord = { 22,3 }, type = "engrave", text = "Drop items with '" .. nh.eckey("drop") .. "'", degrade = false });
+des.engraving({ coord = { 22,4 }, type = "engrave", text = "You can drop partial stacks by prefixing the item slot letter with a number", degrade = false });
 
 --
 
-des.door({ coord = { 18,2 }, state = percent(50) and "locked" or "closed" });
+des.monster({ id = "yellow mold", coord = { 26,2 }, waiting = true, countbirth = false });
+
+des.engraving({ coord = { 25,5 }, type = "engrave", text = "Throw items with '" .. nh.eckey("throw") .. "'", degrade = false });
+
+des.trap({ type = "magic portal", coord = { 21,1 }, seen = true });
+
+--
+
+des.monster({ id = "wolf", coord = { 29,2 }, peaceful = 0, waiting = true, countbirth = false });
+
+des.engraving({ coord = { 37,4 }, type = "engrave", text = "Missiles, such as rocks, work better when fired from appropriate launcher", degrade = false });
+
+des.object({ coord = { 37,3 }, id = "sling", buc = "not-cursed", spe = 9 });
+des.engraving({ coord = { 37,3 }, type = "engrave", text = "Wield the sling", degrade = false });
+des.engraving({ coord = { 36,1 }, type = "engrave", text = "Use '" .. nh.eckey("fire") .. "' to fire missiles with the wielded launcher", degrade = false });
+
+des.engraving({ coord = { 35,4 }, type = "engrave", text = "Firing launches items from your quiver; Use '" .. nh.eckey("quiver") .. "' to put items in it", degrade = false });
+
+des.engraving({ coord = { 33,4 }, type = "engrave", text = "You can wait a turn with '" .. nh.eckey("wait") .. "'", degrade = false });
+
+
+--
+
+des.door({ coord = { 38,6 }, state = "closed" });
+
+des.engraving({ coord = { 39,6 }, type = "engrave", text = "You loot containers with '" .. nh.eckey("loot") .. "'", degrade = false });
+
+des.object({ coord = { 42,6 }, id = "large box", broken = true,
+             contents = function(obj)
+                des.object({ id = "secret door detection", class = "/", spe = 30 }); end
+});
+
+des.engraving({ coord = { 45,6 }, type = "engrave", text = "Magic wands are used with '" .. nh.eckey("zap") .. "'", degrade = false });
+
+--
+
+des.door({ coord = { 35,9 }, state = "nodoor" });
+des.engraving({ coord = { 34,9 }, type = "engrave", text = "You can run by prefixing a movement key with '" .. nh.eckey("run") .. "'", degrade = false });
+
+--
+
+des.door({ coord = { 33,16 }, state = "nodoor" });
+des.engraving({ coord = { 35,15 }, type = "engrave", text = "Travel across the level with '" .. nh.eckey("travel") .. "'", degrade = false });
+
+--
+
+des.trap({ type = "magic portal", coord = { 27,14 }, seen = true });
+
+--
+
+des.engraving({ coord = { 48,1 }, type = "burn", text = "Use '" .. nh.eckey("eat") .. "' to eat edible things", degrade = false });
+
+des.object({ coord = { 50,3 }, id = "apple", buc = "not-cursed"  });
+des.object({ coord = { 50,3 }, id = "candy bar", buc = "not-cursed"  });
+
+local otmp = des.object({ coord = { 50,3 }, id = "corpse", montype = "newt", buc = "not-cursed" });
+otmp:stop_timer("rot-corpse");
+
+--
+
+des.door({ coord = { 46,11 }, state = "closed" });
+
+des.engraving({ coord = { 43,11 }, type = "burn", text = "Use '" .. nh.eckey("twoweapon") .. "' to use two weapons at once", degrade = false });
+des.object({ coord = { 43,13 }, id = "knife", buc = "uncursed" });
+des.object({ coord = { 43,14 }, id = "dagger", buc = "blessed" });
+
+des.engraving({ coord = { 43,16 }, type = "burn", text = "Swap weapons quickly with '" .. nh.eckey("swap") .. "'", degrade = false });
+
+des.door({ coord = { 40,15 }, state = "random" });
+
+--
+
+des.object({ coord = { 48,7 }, id = "ring of levitation", buc = "not-cursed" });
+
+des.engraving({ coord = { 48,10 }, type = "burn", text = "Put on accessories with '" .. nh.eckey("puton") .. "'", degrade = false });
+
+des.engraving({ coord = { 48,16 }, type = "burn", text = "Remove accessories with '" .. nh.eckey("remove") .. "'", degrade = false });
+
+des.door({ coord = { 50,16 }, state = "closed" });
+
+
+--
+
+des.engraving({ coord = { 58,9 }, type = "burn", text = "Use '" .. nh.eckey("down") .. "' to go down the stairs", degrade = false });
+des.stair({ dir = "down", coord = { 58,10 } });
+
+--
+
+des.engraving({ coord = { 65,3 }, type = "burn", text = "UNDER CONSTRUCTION", degrade = false });
+
+des.trap({ type = "magic portal", coord = { 66,2 }, seen = true });
 
 ----------------
 
-nh.callback("cmd_before", "tutorial_cmd_before");
-nh.callback("level_enter", "tutorial_enter");
-nh.callback("level_leave", "tutorial_leave");
-nh.callback("end_turn", "tutorial_turn");
+-- entering and leaving tutorial _branch_ now handled by core
+-- // nh.callback("cmd_before", "tutorial_cmd_before");
+-- // nh.callback("level_enter", "tutorial_enter");
+-- // nh.callback("level_leave", "tutorial_leave");
+-- // nh.callback("end_turn", "tutorial_turn");
 
 ----------------
 

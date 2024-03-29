@@ -1,4 +1,4 @@
-/* NetHack 3.7	cmd.c	$NHDT-Date: 1671222065 2022/12/16 20:21:05 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.650 $ */
+/* NetHack 3.7	cmd.c	$NHDT-Date: 1710029089 2024/03/10 00:04:49 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.712 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2013. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -14,10 +14,6 @@
 #if defined(SYSV) || defined(DGUX) || defined(HPUX)
 #define NR_OF_EOFS 20
 #endif
-#endif
-#if (NH_DEVEL_STATUS != NH_STATUS_RELEASED) || defined(DEBUG)
-static int wiz_display_macros(void);
-static int wiz_mon_diff(void);
 #endif
 
 #ifdef DUMB /* stuff commented out in extern.h, but needed here */
@@ -98,99 +94,68 @@ extern int dozap(void);              /**/
 extern int doorganize(void);         /**/
 #endif /* DUMB */
 
-static const char *ecname_from_fn(int (*)(void));
-static int dosuspend_core(void);
-static int dosh_core(void);
-static int doherecmdmenu(void);
-static int dotherecmdmenu(void);
-static int doprev_message(void);
-static int timed_occupation(void);
-static boolean can_do_extcmd(const struct ext_func_tab *);
-static int dotravel(void);
-static int dotravel_target(void);
-static int doclicklook(void);
-static int domouseaction(void);
-static int doterrain(void);
-static int wiz_wish(void);
-static int wiz_identify(void);
-static int wiz_map(void);
-static int wiz_makemap(void);
-static int wiz_genesis(void);
-static int wiz_where(void);
-static int wiz_detect(void);
-static int wiz_panic(void);
-static int wiz_fuzzer(void);
-static int wiz_polyself(void);
-static int wiz_kill(void);
-static int wiz_load_lua(void);
-static int wiz_level_tele(void);
-static int wiz_level_change(void);
-static int wiz_flip_level(void);
-static int wiz_show_seenv(void);
-static int wiz_show_vision(void);
-static int wiz_smell(void);
-static int wiz_intrinsic(void);
-static int wiz_show_wmodes(void);
-static int wiz_show_stats(void);
-static int wiz_rumor_check(void);
-static int wiz_migrate_mons(void);
+staticfn int dosuspend_core(void);
+staticfn int dosh_core(void);
+staticfn int doherecmdmenu(void);
+staticfn int dotherecmdmenu(void);
+staticfn int doprev_message(void);
+staticfn int timed_occupation(void);
+staticfn boolean can_do_extcmd(const struct ext_func_tab *);
+staticfn int dotravel(void);
+staticfn int dotravel_target(void);
+staticfn int doclicklook(void);
+staticfn boolean yn_menuable_resp(const char *);
+staticfn void yn_func_menu_opt(winid, char, const char *, char);
+staticfn boolean yn_function_menu(const char *, const char *, char, char *);
+staticfn int domouseaction(void);
+staticfn int doterrain(void);
+staticfn boolean u_have_seen_whole_selection(struct selectionvar *);
+staticfn boolean u_have_seen_bounds_selection(struct selectionvar *);
+staticfn boolean u_can_see_whole_selection(struct selectionvar *);
+staticfn int dolookaround_floodfill_findroom(coordxy, coordxy);
+staticfn void lookaround_known_room(coordxy, coordxy);
 
-static void makemap_unmakemon(struct monst *, boolean);
-static void makemap_remove_mons(void);
-static void wiz_map_levltyp(void);
-static void wiz_levltyp_legend(void);
 #if defined(__BORLANDC__) && !defined(_WIN32)
 extern void show_borlandc_stats(winid);
 #endif
-static int size_monst(struct monst *, boolean);
-static int size_obj(struct obj *);
-static void count_obj(struct obj *, long *, long *, boolean, boolean);
-static void obj_chain(winid, const char *, struct obj *, boolean, long *,
-                      long *);
-static void mon_invent_chain(winid, const char *, struct monst *, long *,
-                             long *);
-static void mon_chain(winid, const char *, struct monst *, boolean, long *,
-                      long *);
-static void contained_stats(winid, const char *, long *, long *);
-static void misc_stats(winid, long *, long *);
-static void you_sanity_check(void);
-static boolean accept_menu_prefix(const struct ext_func_tab *);
-static void reset_cmd_vars(boolean);
+staticfn boolean accept_menu_prefix(const struct ext_func_tab *);
+staticfn void reset_cmd_vars(boolean);
 
-static void mcmd_addmenu(winid, int, const char *);
-static int there_cmd_menu_self(winid, coordxy, coordxy, int *);
-static int there_cmd_menu_next2u(winid, coordxy, coordxy, int, int *);
-static int there_cmd_menu_far(winid, coordxy, coordxy, int);
-static int there_cmd_menu_common(winid, coordxy, coordxy, int, int *);
-static void act_on_act(int, coordxy, coordxy);
-static char there_cmd_menu(coordxy, coordxy, int);
-static char here_cmd_menu(void);
+staticfn void mcmd_addmenu(winid, int, const char *);
+staticfn int there_cmd_menu_self(winid, coordxy, coordxy, int *);
+staticfn int there_cmd_menu_next2u(winid, coordxy, coordxy, int, int *);
+staticfn int there_cmd_menu_far(winid, coordxy, coordxy, int);
+staticfn int there_cmd_menu_common(winid, coordxy, coordxy, int, int *);
+staticfn void act_on_act(int, coordxy, coordxy);
+staticfn char there_cmd_menu(coordxy, coordxy, int);
+staticfn char here_cmd_menu(void);
 
-static char readchar_core(coordxy *, coordxy *, int *);
-static char *parse(void);
-static void show_direction_keys(winid, char, boolean);
-static boolean help_dir(char, uchar, const char *);
-static int QSORTCALLBACK migrsort_cmp(const genericptr, const genericptr);
-static void list_migrating_mons(d_level *);
+staticfn char readchar_core(coordxy *, coordxy *, int *);
+staticfn int parse(void);
+staticfn void show_direction_keys(winid, char, boolean);
+staticfn boolean help_dir(char, uchar, const char *);
 
-static void handler_rebind_keys_add(boolean);
-static boolean bind_key_fn(uchar, int (*)(void));
-static void commands_init(void);
-static boolean keylist_func_has_key(const struct ext_func_tab *, boolean *);
-static int keylist_putcmds(winid, boolean, int, int, boolean *);
-static const char *spkey_name(int);
+staticfn void handler_rebind_keys_add(boolean);
+staticfn boolean bind_key_fn(uchar, int (*)(void));
+staticfn void commands_init(void);
+staticfn boolean keylist_func_has_key(const struct ext_func_tab *, boolean *);
+staticfn int keylist_putcmds(winid, boolean, int, int, boolean *);
+staticfn const char *spkey_name(int);
 
-static int (*timed_occ_fn)(void);
-static char *doc_extcmd_flagstr(winid, const struct ext_func_tab *);
+staticfn int (*timed_occ_fn)(void);
+staticfn char *doc_extcmd_flagstr(winid, const struct ext_func_tab *);
 
 static const char *readchar_queue = "";
-/* for rejecting attempts to use wizard mode commands */
-static const char unavailcmd[] = "Unavailable command '%s'.";
+
+/* for rejecting attempts to use wizard mode commands
+ * Also used in wizcmds.c  */
+const char unavailcmd[] = "Unavailable command '%s'.";
+
 /* for rejecting #if !SHELL, !SUSPEND */
 static const char cmdnotavail[] = "'%s' command not available.";
 
 /* the #prevmsg command */
-static int
+staticfn int
 doprev_message(void)
 {
     (void) nh_doprev_message();
@@ -198,7 +163,7 @@ doprev_message(void)
 }
 
 /* Count down by decrementing multi */
-static int
+staticfn int
 timed_occupation(void)
 {
     (*timed_occ_fn)();
@@ -462,7 +427,7 @@ cmdq_clear(int q)
 char
 pgetchar(void) /* courtesy of aeb@cwi.nl */
 {
-    register int ch = '\0';
+    int ch = '\0';
 
     if (iflags.debug_fuzzer)
         return randomkey();
@@ -477,7 +442,7 @@ extcmd_initiator(void)
     return gc.Cmd.extcmd_char;
 }
 
-static boolean
+staticfn boolean
 can_do_extcmd(const struct ext_func_tab *extcmd)
 {
     int ecflags = extcmd->flags;
@@ -486,9 +451,12 @@ can_do_extcmd(const struct ext_func_tab *extcmd)
         lua_getglobal(gl.luacore, "nh_callback_run");
         lua_pushstring(gl.luacore, nhcb_name[NHCB_CMD_BEFORE]);
         lua_pushstring(gl.luacore, extcmd->ef_txt);
-        nhl_pcall(gl.luacore, 2, 1);
-        if (!lua_toboolean(gl.luacore, -1))
+        nhl_pcall_handle(gl.luacore, 2, 1, "can_do_extcmd", NHLpa_panic);
+        if (!lua_toboolean(gl.luacore, -1)) {
+            lua_settop(gl.luacore, 0);
             return FALSE;
+        }
+        lua_settop(gl.luacore, 0);
     }
 
     if (!wizard && (ecflags & WIZMODECMD)) {
@@ -535,26 +503,22 @@ doextcmd(void)
 }
 
 /* format extended command flags for display */
-static char *
+staticfn char *
 doc_extcmd_flagstr(
     winid menuwin,
     const struct ext_func_tab *efp) /* if Null, add a footnote to the menu */
 {
     static char Abuf[10]; /* 5 would suffice: {'[','m','A',']','\0'} */
-    int clr = 0;
 
     /* note: tag shown for menu prefix is 'm' even if m-prefix action
        has been bound to some other key */
     if (!efp) {
         char qbuf[QBUFSZ];
-        anything any = cg.zeroany;
 
-        add_menu(menuwin, &nul_glyphinfo, &any, 0, 0, ATR_NONE, clr,
-                 "[A] Command autocompletes", MENU_ITEMFLAGS_NONE);
+        add_menu_str(menuwin, "[A] Command autocompletes");
         Sprintf(qbuf, "[m] Command accepts '%s' prefix",
                 visctrl(cmd_from_func(do_reqmenu)));
-        add_menu(menuwin, &nul_glyphinfo, &any, 0, 0, ATR_NONE, clr, qbuf,
-                 MENU_ITEMFLAGS_NONE);
+        add_menu_str(menuwin, qbuf);
         return (char *) 0;
     } else {
         boolean mprefix = accept_menu_prefix(efp),
@@ -580,8 +544,9 @@ doc_extcmd_flagstr(
 int
 doextlist(void)
 {
-    register const struct ext_func_tab *efp = (struct ext_func_tab *) 0;
-    char buf[BUFSZ], searchbuf[BUFSZ], promptbuf[QBUFSZ];
+    const struct ext_func_tab *efp = (struct ext_func_tab *) 0;
+    char buf[BUFSZ], searchbuf[BUFSZ], descbuf[BUFSZ], promptbuf[QBUFSZ];
+    const char *cmd_desc;
     winid menuwin;
     anything any;
     menu_item *selected;
@@ -590,7 +555,7 @@ doextlist(void)
     boolean redisplay = TRUE, search = FALSE;
     static const char *const headings[] = { "Extended commands",
                                       "Debugging Extended Commands" };
-    int clr = 0;
+    int clr = NO_COLOR;
 
     searchbuf[0] = '\0';
     menuwin = create_nhwindow(NHW_MENU);
@@ -599,11 +564,8 @@ doextlist(void)
         redisplay = FALSE;
         any = cg.zeroany;
         start_menu(menuwin, MENU_BEHAVE_STANDARD);
-        add_menu(menuwin, &nul_glyphinfo, &any, 0, 0, ATR_NONE, clr,
-                 "Extended Commands List",
-                 MENU_ITEMFLAGS_NONE);
-        add_menu(menuwin, &nul_glyphinfo, &any, 0, 0, ATR_NONE, clr,
-                 "", MENU_ITEMFLAGS_NONE);
+        add_menu_str(menuwin, "Extended Commands List");
+        add_menu_str(menuwin, "");
 
         Sprintf(buf, "Switch to %s commands that don't autocomplete",
                 menumode ? "including" : "excluding");
@@ -641,9 +603,7 @@ doextlist(void)
        : "Switch to showing all alphabetically, including debugging commands",
                      MENU_ITEMFLAGS_NONE);
         }
-        any = cg.zeroany;
-        add_menu(menuwin, &nul_glyphinfo, &any, 0, 0, ATR_NONE, clr,
-                 "", MENU_ITEMFLAGS_NONE);
+        add_menu_str(menuwin, "");
         menushown[0] = menushown[1] = 0;
         n = 0;
         for (pass = 0; pass <= 1; ++pass) {
@@ -654,20 +614,10 @@ doextlist(void)
             for (efp = extcmdlist; efp->ef_txt; efp++) {
                 int wizc;
 
-                if ((efp->flags & (CMD_NOT_AVAILABLE|INTERNALCMD)) != 0)
+                if ((efp->flags & (CMD_NOT_AVAILABLE | INTERNALCMD)) != 0)
                     continue;
                 /* if hiding non-autocomplete commands, skip such */
                 if (menumode == 1 && (efp->flags & AUTOCOMPLETE) == 0)
-                    continue;
-                /* if searching, skip this command if it doesn't match */
-                if (*searchbuf
-                    /* first try case-insensitive substring match */
-                    && !strstri(efp->ef_txt, searchbuf)
-                    && !strstri(efp->ef_desc, searchbuf)
-                    /* wildcard support; most interfaces use case-insensitve
-                       pmatch rather than regexp for menu searching */
-                    && !pmatchi(searchbuf, efp->ef_txt)
-                    && !pmatchi(searchbuf, efp->ef_desc))
                     continue;
                 /* skip wizard mode commands if not in wizard mode;
                    when showing two sections, skip wizard mode commands
@@ -677,6 +627,26 @@ doextlist(void)
                     continue;
                 if (!onelist && pass != wizc)
                     continue;
+                /* command description might get modified on the fly */
+                cmd_desc = efp->ef_desc;
+                /* suppress part of the description for #genocided if it
+                   doesn't apply during the current game */
+                if (!wizard && !discover
+                    && (efp->flags & GENERALCMD) != 0 /* minor optimization */
+                    && strstri(cmd_desc, "extinct"))
+                    cmd_desc = strsubst(strcpy(descbuf, cmd_desc),
+                                        " been genocided or become extinct",
+                                        " been genocided");
+                /* if searching, skip this command if it doesn't match */
+                if (*searchbuf
+                    /* first try case-insensitive substring match */
+                    && !strstri(efp->ef_txt, searchbuf)
+                    && !strstri(cmd_desc, searchbuf)
+                    /* wildcard support; most interfaces use case-insensitive
+                       pmatch rather than regexp for menu searching */
+                    && !pmatchi(searchbuf, efp->ef_txt)
+                    && !pmatchi(searchbuf, cmd_desc))
+                    continue;
 
                 /* We're about to show an item, have we shown the menu yet?
                    Doing menu in inner loop like this on demand avoids a
@@ -684,26 +654,21 @@ doextlist(void)
                    results menu. */
                 if (!menushown[pass]) {
                     Strcpy(buf, headings[pass]);
-                    add_menu(menuwin, &nul_glyphinfo, &any, 0, 0,
-                             iflags.menu_headings, clr, buf,
-                             MENU_ITEMFLAGS_NONE);
+                    add_menu_heading(menuwin, buf);
                     menushown[pass] = 1;
                 }
                 /* longest ef_txt at present is "wizrumorcheck" (13 chars);
                    2nd field will be "    " or " [A]" or " [m]" or "[mA]" */
                 Sprintf(buf, " %-14s %4s %s", efp->ef_txt,
-                        doc_extcmd_flagstr(menuwin, efp), efp->ef_desc);
-                add_menu(menuwin, &nul_glyphinfo, &any, 0, 0, ATR_NONE,
-                         clr, buf, MENU_ITEMFLAGS_NONE);
+                        doc_extcmd_flagstr(menuwin, efp), cmd_desc);
+                add_menu_str(menuwin, buf);
                 ++n;
             }
             if (n)
-                add_menu(menuwin, &nul_glyphinfo, &any, 0, 0, ATR_NONE,
-                         clr, "", MENU_ITEMFLAGS_NONE);
+                add_menu_str(menuwin, "");
         }
         if (*searchbuf && !n)
-            add_menu(menuwin, &nul_glyphinfo, &any, 0, 0, ATR_NONE,
-                     clr, "no matches", MENU_ITEMFLAGS_NONE);
+            add_menu_str(menuwin, "no matches");
         else
             (void) doc_extcmd_flagstr(menuwin, (struct ext_func_tab *) 0);
 
@@ -781,7 +746,7 @@ extcmd_via_menu(void)
     int accelerator, prevaccelerator;
     int matchlevel = 0;
     boolean wastoolong, one_per_line;
-    int clr = 0;
+    int clr = NO_COLOR;
 
     ret = 0;
     cbuf[0] = '\0';
@@ -805,7 +770,7 @@ extcmd_via_menu(void)
       "Exceeded %d extended commands in doextcmd() menu; 'extmenu' disabled.",
                                MAX_EXT_CMD);
 #endif /* NH_DEVEL_STATUS != NH_STATUS_RELEASED */
-                    iflags.extmenu = 0;
+                    iflags.extmenu = FALSE;
                     return -1;
                 }
             }
@@ -949,6 +914,9 @@ domonability(void)
             aggravate();
     } else if (is_vampire(uptr) || is_vampshifter(&gy.youmonst)) {
         return dopoly();
+    } else if (u.usteed && can_breathe(u.usteed->data)) {
+        (void) pet_ranged_attk(u.usteed);
+        return ECMD_TIME;
     } else if (Upolyd) {
         pline("Any special ability you may have is purely reflexive.");
     } else {
@@ -965,10 +933,7 @@ enter_explore_mode(void)
     } else {
         const char *oldmode = !wizard ? "normal game" : "debug mode";
 
-#ifdef SYSCF
-#if defined(UNIX)
-        if (!sysopt.explorers || !sysopt.explorers[0]
-            || !check_user_string(sysopt.explorers)) {
+        if (!authorize_explore_mode()) {
             if (!wizard) {
                 You("cannot access explore mode.");
                 return ECMD_OK;
@@ -978,8 +943,6 @@ enter_explore_mode(void)
                 /* keep going */
             }
         }
-#endif
-#endif
         pline("Beware!  From explore mode there will be no return to %s,",
               oldmode);
         if (paranoid_query(ParanoidQuit,
@@ -994,124 +957,6 @@ enter_explore_mode(void)
         }
     }
     return ECMD_OK;
-}
-
-/* #wizwish command - wish for something */
-static int
-wiz_wish(void) /* Unlimited wishes for debug mode by Paul Polderman */
-{
-    if (wizard) {
-        boolean save_verbose = flags.verbose;
-
-        flags.verbose = FALSE;
-        makewish();
-        flags.verbose = save_verbose;
-        (void) encumber_msg();
-    } else
-        pline(unavailcmd, ecname_from_fn(wiz_wish));
-    return ECMD_OK;
-}
-
-/* #wizidentify command - reveal and optionally identify hero's inventory */
-static int
-wiz_identify(void)
-{
-    if (wizard) {
-        iflags.override_ID = (int) cmd_from_func(wiz_identify);
-        /* command remapping might leave #wizidentify as the only way
-           to invoke us, in which case cmd_from_func() will yield NUL;
-           it won't matter to display_inventory()/display_pickinv()
-           if ^I invokes some other command--what matters is that
-           display_pickinv() and xname() see override_ID as nonzero */
-        if (!iflags.override_ID)
-            iflags.override_ID = C('I');
-        (void) display_inventory((char *) 0, FALSE);
-        iflags.override_ID = 0;
-    } else
-        pline(unavailcmd, ecname_from_fn(wiz_identify));
-    return ECMD_OK;
-}
-
-/* used when wiz_makemap() gets rid of monsters for the old incarnation of
-   a level before creating a new incarnation of it */
-static void
-makemap_unmakemon(struct monst *mtmp, boolean migratory)
-{
-    int ndx = monsndx(mtmp->data);
-
-    /* uncreate any unique monster so that it is eligible to be remade
-       on the new incarnation of the level; ignores DEADMONSTER() [why?] */
-    if (mtmp->data->geno & G_UNIQ)
-        gm.mvitals[ndx].mvflags &= ~G_EXTINCT;
-    if (gm.mvitals[ndx].born)
-        gm.mvitals[ndx].born--;
-
-    /* vault is going away; get rid of guard who might be in play or
-       be parked at <0,0>; for the latter, might already be flagged as
-       dead but is being kept around because of the 'isgd' flag */
-    if (mtmp->isgd) {
-        mtmp->isgd = 0; /* after this, fall through to mongone() */
-    } else if (DEADMONSTER(mtmp)) {
-        return; /* already set to be discarded */
-    } else if (mtmp->isshk && on_level(&u.uz, &ESHK(mtmp)->shoplevel)) {
-        setpaid(mtmp);
-    }
-    if (migratory) {
-        /* caller has removed 'mtmp' from migrating_mons; put it onto fmon
-           so that dmonsfree() bookkeeping for number of dead or removed
-           monsters won't get out of sync; it is not on the map but
-           mongone() -> m_detach() -> mon_leaving_level() copes with that */
-        mtmp->mstate |= MON_OFFMAP;
-        mtmp->mstate &= ~(MON_MIGRATING | MON_LIMBO);
-        mtmp->nmon = fmon;
-        fmon = mtmp;
-    }
-    mongone(mtmp);
-}
-
-/* get rid of the all the monsters on--or intimately involved with--current
-   level; used when #wizmakemap destroys the level before replacing it */
-static void
-makemap_remove_mons(void)
-{
-    struct monst *mtmp, **mprev;
-
-    /* keep steed and other adjacent pets after releasing them
-       from traps, stopping eating, &c as if hero were ascending */
-    keepdogs(TRUE); /* (pets-only; normally we'd be using 'FALSE') */
-    /* get rid of all the monsters that didn't make it to 'mydogs' */
-    for (mtmp = fmon; mtmp; mtmp = mtmp->nmon) {
-        /* if already dead, dmonsfree(below) will get rid of it */
-        if (DEADMONSTER(mtmp))
-            continue;
-        makemap_unmakemon(mtmp, FALSE);
-    }
-    /* some monsters retain details of this level in mon->mextra; that
-       data becomes invalid when the level is replaced by a new one;
-       get rid of them now if migrating or already arrived elsewhere;
-       [when on their 'home' level, the previous loop got rid of them;
-       if they aren't actually migrating but have been placed on some
-       'away' level, such monsters are treated like the Wizard:  kept
-       on migrating monsters list, scheduled to migrate back to their
-       present location instead of being saved with whatever level they
-       happen to be on; see keepdogs() and keep_mon_accessible(dog.c)] */
-    for (mprev = &gm.migrating_mons; (mtmp = *mprev) != 0; ) {
-        if (mtmp->mextra
-            && ((mtmp->isshk && on_level(&u.uz, &ESHK(mtmp)->shoplevel))
-                || (mtmp->ispriest && on_level(&u.uz, &EPRI(mtmp)->shrlevel))
-                || (mtmp->isgd && on_level(&u.uz, &EGD(mtmp)->gdlevel)))) {
-            *mprev = mtmp->nmon;
-            makemap_unmakemon(mtmp, TRUE);
-        } else {
-            mprev = &mtmp->nmon;
-        }
-    }
-    /* release dead and 'unmade' monsters */
-    dmonsfree();
-    if (fmon) {
-        impossible("makemap_remove_mons: 'fmon' did not get emptied?");
-    }
-    return;
 }
 
 void
@@ -1155,8 +1000,8 @@ makemap_prepost(boolean pre, boolean wiztower)
         /* escape from trap */
         reset_utrap(FALSE);
         check_special_room(TRUE); /* room exit */
-        (void) memset((genericptr_t)&gd.dndest, 0, sizeof (dest_area));
-        (void) memset((genericptr_t)&gu.updest, 0, sizeof (dest_area));
+        (void) memset((genericptr_t) &gd.dndest, 0, sizeof (dest_area));
+        (void) memset((genericptr_t) &gu.updest, 0, sizeof (dest_area));
         u.ustuck = (struct monst *) 0;
         u.uswallow = u.uswldtim = 0;
         set_uinwater(0); /* u.uinwater = 0 */
@@ -1197,674 +1042,18 @@ makemap_prepost(boolean pre, boolean wiztower)
     }
 }
 
-/* #wizmakemap - discard current dungeon level and replace with a new one */
-static int
-wiz_makemap(void)
-{
-    if (wizard) {
-        boolean was_in_W_tower = In_W_tower(u.ux, u.uy, &u.uz);
-
-        makemap_prepost(TRUE, was_in_W_tower);
-        /* create a new level; various things like bestowing a guardian
-           angel on Astral or setting off alarm on Ft.Ludios are handled
-           by goto_level(do.c) so won't occur for replacement levels */
-        mklev();
-        makemap_prepost(FALSE, was_in_W_tower);
-    } else {
-        pline(unavailcmd, ecname_from_fn(wiz_makemap));
-    }
-    return ECMD_OK;
-}
-
-/* the #wizmap command - reveal the level map
-   and any traps or engravings on it */
-static int
-wiz_map(void)
-{
-    if (wizard) {
-        struct trap *t;
-        struct engr *ep;
-        long save_Hconf = HConfusion, save_Hhallu = HHallucination;
-
-        HConfusion = HHallucination = 0L;
-        for (t = gf.ftrap; t != 0; t = t->ntrap) {
-            t->tseen = 1;
-            map_trap(t, TRUE);
-        }
-        for (ep = head_engr; ep != 0; ep = ep->nxt_engr) {
-            map_engraving(ep, TRUE);
-        }
-        do_mapping();
-        HConfusion = save_Hconf;
-        HHallucination = save_Hhallu;
-    } else
-        pline(unavailcmd, ecname_from_fn(wiz_map));
-    return ECMD_OK;
-}
-
-/* #wizgenesis - generate monster(s); a count prefix will be honored */
-static int
-wiz_genesis(void)
-{
-    if (wizard) {
-        boolean mongen_saved = iflags.debug_mongen;
-
-        iflags.debug_mongen = FALSE;
-        (void) create_particular();
-        iflags.debug_mongen = mongen_saved;
-    } else
-        pline(unavailcmd, ecname_from_fn(wiz_genesis));
-    return ECMD_OK;
-}
-
-/* #wizwhere command - display dungeon layout */
-static int
-wiz_where(void)
-{
-    if (wizard)
-        (void) print_dungeon(FALSE, (schar *) 0, (xint16 *) 0);
-    else
-        pline(unavailcmd, ecname_from_fn(wiz_where));
-    return ECMD_OK;
-}
-
-/* the #wizdetect command - detect secret doors, traps, hidden monsters */
-static int
-wiz_detect(void)
-{
-    if (wizard)
-        (void) findit();
-    else
-        pline(unavailcmd, ecname_from_fn(wiz_detect));
-    return ECMD_OK;
-}
-
-/* the #wizkill command - pick targets and reduce them to 0HP;
-   by default, the hero is credited/blamed; use 'm' prefix to avoid that */
-static int
-wiz_kill(void)
-{
-    struct monst *mtmp;
-    coord cc;
-    int ans;
-    char c, qbuf[QBUFSZ];
-    const char *prompt = "Pick first monster to slay";
-    boolean save_verbose = flags.verbose,
-            save_autodescribe = iflags.autodescribe;
-    d_level uarehere = u.uz;
-
-    cc.x = u.ux, cc.y = u.uy;
-    for (;;) {
-        pline("%s:", prompt);
-        prompt = "Next monster";
-
-        flags.verbose = FALSE;
-        iflags.autodescribe = TRUE;
-        ans = getpos(&cc, TRUE, "a monster");
-        flags.verbose = save_verbose;
-        iflags.autodescribe = save_autodescribe;
-        if (ans < 0 || cc.x < 1)
-            break;
-
-        mtmp = 0;
-        if (u_at(cc.x, cc.y)) {
-            if (u.usteed) {
-                Sprintf(qbuf, "Kill %.110s?", mon_nam(u.usteed));
-                if ((c = ynq(qbuf)) == 'q')
-                    break;
-                if (c == 'y')
-                    mtmp = u.usteed;
-            }
-            if (!mtmp) {
-                Sprintf(qbuf, "%s?", Role_if(PM_SAMURAI) ? "Perform seppuku"
-                                                         : "Commit suicide");
-                if (paranoid_query(TRUE, qbuf)) {
-                    Sprintf(gk.killer.name, "%s own player", uhis());
-                    gk.killer.format = KILLED_BY;
-                    done(DIED);
-                }
-                break;
-            }
-        } else if (u.uswallow) {
-            mtmp = next2u(cc.x, cc.y) ? u.ustuck : 0;
-        } else {
-            mtmp = m_at(cc.x, cc.y);
-        }
-
-        /* whether there's an unseen monster here or not, player will know
-           that there's no monster here after the kill or failed attempt;
-           let hero know too */
-        (void) unmap_invisible(cc.x, cc.y);
-
-        if (mtmp) {
-            /* we don't require that the monster be seen or sensed so
-               we issue our own message in order to name it in case it
-               isn't; note that if it triggers other kills, those might
-               be referred to as "it" */
-            int tame = !!mtmp->mtame,
-                seen = (canspotmon(mtmp) || (u.uswallow && mtmp == u.ustuck)),
-                flgs = (SUPPRESS_IT | SUPPRESS_HALLUCINATION
-                        | ((tame && has_mgivenname(mtmp)) ? SUPPRESS_SADDLE
-                           : 0)),
-                articl = tame ? ARTICLE_YOUR : seen ? ARTICLE_THE : ARTICLE_A;
-            const char *adjs = tame ? (!seen ? "poor, unseen" : "poor")
-                                    : (!seen ? "unseen" : (const char *) 0);
-            char *Mn = x_monnam(mtmp, articl, adjs, flgs, FALSE);
-
-            if (!iflags.menu_requested) {
-                /* normal case: hero is credited/blamed */
-                You("%s %s!", nonliving(mtmp->data) ? "destroy" : "kill", Mn);
-                xkilled(mtmp, XKILL_NOMSG);
-            } else { /* 'm'-prefix */
-                /* we know that monsters aren't moving because player has
-                   just issued this #wizkill command, but if 'mtmp' is a
-                   gas spore whose explosion kills any other monsters we
-                   need to have the mon_moving flag be True in order to
-                   avoid blaming or crediting hero for their deaths */
-                gc.context.mon_moving = TRUE;
-                pline("%s is %s.", upstart(Mn),
-                      nonliving(mtmp->data) ? "destroyed" : "killed");
-                /* Null second arg suppresses the usual message */
-                monkilled(mtmp, (char *) 0, AD_PHYS);
-                gc.context.mon_moving = FALSE;
-            }
-            /* end targetting loop if an engulfer dropped hero onto a level-
-               changing trap */
-            if (u.utotype || !on_level(&u.uz, &uarehere))
-                break;
-        } else {
-            There("is no monster there.");
-            break;
-        }
-    }
-    /* distinction between ECMD_CANCEL and ECMD_OK is unimportant here */
-    return ECMD_OK; /* no time elapses */
-}
-
-/* the #wizloadlua command - load an arbitrary lua file */
-static int
-wiz_load_lua(void)
-{
-    if (wizard) {
-        char buf[BUFSZ];
-        nhl_sandbox_info sbi = {NHL_SB_SAFE | NHL_SB_DEBUGGING, 0, 0, 0};
-
-        buf[0] = '\0';
-        getlin("Load which lua file?", buf);
-        if (buf[0] == '\033' || buf[0] == '\0')
-            return ECMD_CANCEL;
-        if (!strchr(buf, '.'))
-            strcat(buf, ".lua");
-        (void) load_lua(buf, &sbi);
-    } else
-        pline(unavailcmd, ecname_from_fn(wiz_load_lua));
-    return ECMD_OK;
-}
-
-/* the #wizloaddes command - load a special level lua file */
-static int
-wiz_load_splua(void)
-{
-    if (wizard) {
-        char buf[BUFSZ];
-
-        buf[0] = '\0';
-        getlin("Load which des lua file?", buf);
-        if (buf[0] == '\033' || buf[0] == '\0')
-            return ECMD_CANCEL;
-        if (!strchr(buf, '.'))
-            strcat(buf, ".lua");
-
-        lspo_reset_level(NULL);
-        (void) load_special(buf);
-        lspo_finalize_level(NULL);
-
-    } else
-        pline(unavailcmd, ecname_from_fn(wiz_load_splua));
-    return ECMD_OK;
-}
-
-/* the #wizlevelport command - level teleport */
-static int
-wiz_level_tele(void)
-{
-    if (wizard)
-        level_tele();
-    else
-        pline(unavailcmd, ecname_from_fn(wiz_level_tele));
-    return ECMD_OK;
-}
-
-/* #wizfliplevel - transpose the current level */
-static int
-wiz_flip_level(void)
-{
-    static const char choices[] = "0123",
-        prmpt[] = "Flip 0=randomly, 1=vertically, 2=horizonally, 3=both:";
-
-    /*
-     * Does not handle
-     *   levregions,
-     *   monster mtrack,
-     *   migrating monsters aimed at returning to specific coordinates
-     *     on this level
-     * as flipping is normally done only during level creation.
-     */
-    if (wizard) {
-        char c = yn_function(prmpt, choices, '\0', TRUE);
-
-        if (c && strchr(choices, c)) {
-            c -= '0';
-
-            if (!c)
-                flip_level_rnd(3, TRUE);
-            else
-                flip_level((int) c, TRUE);
-
-            docrt();
-        } else {
-            pline("%s", Never_mind);
-        }
-    }
-    return ECMD_OK;
-}
-
-/* #levelchange command - adjust hero's experience level */
-static int
-wiz_level_change(void)
-{
-    char buf[BUFSZ] = DUMMY;
-    int newlevel = 0;
-    int ret;
-
-    getlin("To what experience level do you want to be set?", buf);
-    (void) mungspaces(buf);
-    if (buf[0] == '\033' || buf[0] == '\0')
-        ret = 0;
-    else
-        ret = sscanf(buf, "%d", &newlevel);
-
-    if (ret != 1) {
-        pline1(Never_mind);
-        return ECMD_OK;
-    }
-    if (newlevel == u.ulevel) {
-        You("are already that experienced.");
-    } else if (newlevel < u.ulevel) {
-        if (u.ulevel == 1) {
-            You("are already as inexperienced as you can get.");
-            return ECMD_OK;
-        }
-        if (newlevel < 1)
-            newlevel = 1;
-        while (u.ulevel > newlevel)
-            losexp("#levelchange");
-    } else {
-        if (u.ulevel >= MAXULEV) {
-            You("are already as experienced as you can get.");
-            return ECMD_OK;
-        }
-        if (newlevel > MAXULEV)
-            newlevel = MAXULEV;
-        while (u.ulevel < newlevel)
-            pluslvl(FALSE);
-    }
-    u.ulevelmax = u.ulevel;
-    return ECMD_OK;
-}
-
-DISABLE_WARNING_CONDEXPR_IS_CONSTANT
-
-/* #wiztelekinesis */
-static int
-wiz_telekinesis(void)
-{
-    int ans = 0;
-    coord cc;
-    struct monst *mtmp = (struct monst *) 0;
-
-    cc.x = u.ux;
-    cc.y = u.uy;
-
-    pline("Pick a monster to hurtle.");
-    do {
-        ans = getpos(&cc, TRUE, "a monster");
-        if (ans < 0 || cc.x < 1)
-            return ECMD_CANCEL;
-
-        if ((((mtmp = m_at(cc.x, cc.y)) != 0) && canspotmon(mtmp))
-            || u_at(cc.x, cc.y)) {
-            if (!getdir("which direction?"))
-                return ECMD_CANCEL;
-
-            if (mtmp) {
-                mhurtle(mtmp, u.dx, u.dy, 6);
-                if (!DEADMONSTER(mtmp) && canspotmon(mtmp)) {
-                    cc.x = mtmp->mx;
-                    cc.y = mtmp->my;
-                }
-            } else {
-                hurtle(u.dx, u.dy, 6, FALSE);
-                cc.x = u.ux, cc.y = u.uy;
-            }
-        }
-
-    } while (u.utotype == UTOTYPE_NONE);
-    return ECMD_OK;
-}
-
-RESTORE_WARNING_CONDEXPR_IS_CONSTANT
-
-/* #panic command - test program's panic handling */
-static int
-wiz_panic(void)
-{
-    if (iflags.debug_fuzzer) {
-        u.uhp = u.uhpmax = 1000;
-        u.uen = u.uenmax = 1000;
-        return ECMD_OK;
-    }
-    if (paranoid_query(TRUE,
-                       "Do you want to call panic() and end your game?"))
-        panic("Crash test.");
-    return ECMD_OK;
-}
-
-/* #debugfuzzer command - fuzztest the program */
-static int
-wiz_fuzzer(void)
-{
-    if (flags.suppress_alert < FEATURE_NOTICE_VER(3,7,0)) {
-        pline("The fuzz tester will make NetHack execute random keypresses.");
-        pline("There is no conventional way out of this mode.");
-    }
-    if (paranoid_query(TRUE, "Do you want to start fuzz testing?"))
-        iflags.debug_fuzzer = TRUE; /* Thoth, take the reins */
-    return ECMD_OK;
-}
-
-/* #polyself command - change hero's form */
-static int
-wiz_polyself(void)
-{
-    polyself(POLY_CONTROLLED);
-    return ECMD_OK;
-}
-
-/* #seenv command */
-static int
-wiz_show_seenv(void)
-{
-    winid win;
-    coordxy x, y, startx, stopx, curx;
-    int v;
-    char row[COLNO + 1];
-
-    win = create_nhwindow(NHW_TEXT);
-    /*
-     * Each seenv description takes up 2 characters, so center
-     * the seenv display around the hero.
-     */
-    startx = max(1, u.ux - (COLNO / 4));
-    stopx = min(startx + (COLNO / 2), COLNO);
-    /* can't have a line exactly 80 chars long */
-    if (stopx - startx == COLNO / 2)
-        startx++;
-
-    for (y = 0; y < ROWNO; y++) {
-        for (x = startx, curx = 0; x < stopx; x++, curx += 2) {
-            if (u_at(x, y)) {
-                row[curx] = row[curx + 1] = '@';
-            } else {
-                v = levl[x][y].seenv & 0xff;
-                if (v == 0)
-                    row[curx] = row[curx + 1] = ' ';
-                else
-                    Sprintf(&row[curx], "%02x", v);
-            }
-        }
-        /* remove trailing spaces */
-        for (x = curx - 1; x >= 0; x--)
-            if (row[x] != ' ')
-                break;
-        row[x + 1] = '\0';
-
-        putstr(win, 0, row);
-    }
-    display_nhwindow(win, TRUE);
-    destroy_nhwindow(win);
-    return ECMD_OK;
-}
-
-/* #vision command */
-static int
-wiz_show_vision(void)
-{
-    winid win;
-    coordxy x, y;
-    int v;
-    char row[COLNO + 1];
-
-    win = create_nhwindow(NHW_TEXT);
-    Sprintf(row, "Flags: 0x%x could see, 0x%x in sight, 0x%x temp lit",
-            COULD_SEE, IN_SIGHT, TEMP_LIT);
-    putstr(win, 0, row);
-    putstr(win, 0, "");
-    for (y = 0; y < ROWNO; y++) {
-        for (x = 1; x < COLNO; x++) {
-            if (u_at(x, y)) {
-                row[x] = '@';
-            } else {
-                v = gv.viz_array[y][x]; /* data access should be hidden */
-                row[x] = (v == 0) ? ' ' : ('0' + v);
-            }
-        }
-        /* remove trailing spaces */
-        for (x = COLNO - 1; x >= 1; x--)
-            if (row[x] != ' ')
-                break;
-        row[x + 1] = '\0';
-
-        putstr(win, 0, &row[1]);
-    }
-    display_nhwindow(win, TRUE);
-    destroy_nhwindow(win);
-    return ECMD_OK;
-}
-
-/* #wmode command */
-static int
-wiz_show_wmodes(void)
-{
-    winid win;
-    coordxy x, y;
-    char row[COLNO + 1];
-    struct rm *lev;
-    boolean istty = WINDOWPORT(tty);
-
-    win = create_nhwindow(NHW_TEXT);
-    if (istty)
-        putstr(win, 0, ""); /* tty only: blank top line */
-    for (y = 0; y < ROWNO; y++) {
-        for (x = 0; x < COLNO; x++) {
-            lev = &levl[x][y];
-            if (u_at(x, y))
-                row[x] = '@';
-            else if (IS_WALL(lev->typ) || lev->typ == SDOOR)
-                row[x] = '0' + (lev->wall_info & WM_MASK);
-            else if (lev->typ == CORR)
-                row[x] = '#';
-            else if (IS_ROOM(lev->typ) || IS_DOOR(lev->typ))
-                row[x] = '.';
-            else
-                row[x] = 'x';
-        }
-        row[COLNO] = '\0';
-        /* map column 0, levl[0][], is off the left edge of the screen */
-        putstr(win, 0, &row[1]);
-    }
-    display_nhwindow(win, TRUE);
-    destroy_nhwindow(win);
-    return ECMD_OK;
-}
-
-/* wizard mode variant of #terrain; internal levl[][].typ values in base-36 */
-static void
-wiz_map_levltyp(void)
-{
-    winid win;
-    coordxy x, y;
-    int terrain;
-    char row[COLNO + 1];
-    boolean istty = !strcmp(windowprocs.name, "tty");
-
-    win = create_nhwindow(NHW_TEXT);
-    /* map row 0, levl[][0], is drawn on the second line of tty screen */
-    if (istty)
-        putstr(win, 0, ""); /* tty only: blank top line */
-    for (y = 0; y < ROWNO; y++) {
-        /* map column 0, levl[0][], is off the left edge of the screen;
-           it should always have terrain type "undiggable stone" */
-        for (x = 1; x < COLNO; x++) {
-            terrain = levl[x][y].typ;
-            /* assumes there aren't more than 10+26+26 terrain types */
-            row[x - 1] = (char) ((terrain == STONE && !may_dig(x, y))
-                                    ? '*'
-                                    : (terrain < 10)
-                                       ? '0' + terrain
-                                       : (terrain < 36)
-                                          ? 'a' + terrain - 10
-                                          : 'A' + terrain - 36);
-        }
-        x--;
-        if (levl[0][y].typ != STONE || may_dig(0, y))
-            row[x++] = '!';
-        row[x] = '\0';
-        putstr(win, 0, row);
-    }
-
-    {
-        char dsc[COLBUFSZ];
-        s_level *slev = Is_special(&u.uz);
-
-        Sprintf(dsc, "D:%d,L:%d", u.uz.dnum, u.uz.dlevel);
-        /* [dungeon branch features currently omitted] */
-        /* special level features */
-        if (slev) {
-            Sprintf(eos(dsc), " \"%s\"", slev->proto);
-            /* special level flags (note: dungeon.def doesn't set `maze'
-               or `hell' for any specific levels so those never show up) */
-            if (slev->flags.maze_like)
-                Strcat(dsc, " mazelike");
-            if (slev->flags.hellish)
-                Strcat(dsc, " hellish");
-            if (slev->flags.town)
-                Strcat(dsc, " town");
-            if (slev->flags.rogue_like)
-                Strcat(dsc, " roguelike");
-            /* alignment currently omitted to save space */
-        }
-        /* level features */
-        if (gl.level.flags.nfountains)
-            Sprintf(eos(dsc), " %c:%d", defsyms[S_fountain].sym,
-                    (int) gl.level.flags.nfountains);
-        if (gl.level.flags.nsinks)
-            Sprintf(eos(dsc), " %c:%d", defsyms[S_sink].sym,
-                    (int) gl.level.flags.nsinks);
-        if (gl.level.flags.has_vault)
-            Strcat(dsc, " vault");
-        if (gl.level.flags.has_shop)
-            Strcat(dsc, " shop");
-        if (gl.level.flags.has_temple)
-            Strcat(dsc, " temple");
-        if (gl.level.flags.has_court)
-            Strcat(dsc, " throne");
-        if (gl.level.flags.has_zoo)
-            Strcat(dsc, " zoo");
-        if (gl.level.flags.has_morgue)
-            Strcat(dsc, " morgue");
-        if (gl.level.flags.has_barracks)
-            Strcat(dsc, " barracks");
-        if (gl.level.flags.has_beehive)
-            Strcat(dsc, " hive");
-        if (gl.level.flags.has_swamp)
-            Strcat(dsc, " swamp");
-        /* level flags */
-        if (gl.level.flags.noteleport)
-            Strcat(dsc, " noTport");
-        if (gl.level.flags.hardfloor)
-            Strcat(dsc, " noDig");
-        if (gl.level.flags.nommap)
-            Strcat(dsc, " noMMap");
-        if (!gl.level.flags.hero_memory)
-            Strcat(dsc, " noMem");
-        if (gl.level.flags.shortsighted)
-            Strcat(dsc, " shortsight");
-        if (gl.level.flags.graveyard)
-            Strcat(dsc, " graveyard");
-        if (gl.level.flags.is_maze_lev)
-            Strcat(dsc, " maze");
-        if (gl.level.flags.is_cavernous_lev)
-            Strcat(dsc, " cave");
-        if (gl.level.flags.arboreal)
-            Strcat(dsc, " tree");
-        if (Sokoban)
-            Strcat(dsc, " sokoban-rules");
-        /* non-flag info; probably should include dungeon branching
-           checks (extra stairs and magic portals) here */
-        if (Invocation_lev(&u.uz))
-            Strcat(dsc, " invoke");
-        if (On_W_tower_level(&u.uz))
-            Strcat(dsc, " tower");
-        /* append a branch identifier for completeness' sake */
-        if (u.uz.dnum == 0)
-            Strcat(dsc, " dungeon");
-        else if (u.uz.dnum == mines_dnum)
-            Strcat(dsc, " mines");
-        else if (In_sokoban(&u.uz))
-            Strcat(dsc, " sokoban");
-        else if (u.uz.dnum == quest_dnum)
-            Strcat(dsc, " quest");
-        else if (Is_knox(&u.uz))
-            Strcat(dsc, " ludios");
-        else if (u.uz.dnum == 1)
-            Strcat(dsc, " gehennom");
-        else if (u.uz.dnum == tower_dnum)
-            Strcat(dsc, " vlad");
-        else if (In_endgame(&u.uz))
-            Strcat(dsc, " endgame");
-        else {
-            /* somebody's added a dungeon branch we're not expecting */
-            const char *brname = gd.dungeons[u.uz.dnum].dname;
-
-            if (!brname || !*brname)
-                brname = "unknown";
-            if (!strncmpi(brname, "the ", 4))
-                brname += 4;
-            Sprintf(eos(dsc), " %s", brname);
-        }
-        /* limit the line length to map width */
-        if (strlen(dsc) >= COLNO)
-            dsc[COLNO - 1] = '\0'; /* truncate */
-        putstr(win, 0, dsc);
-    }
-
-    display_nhwindow(win, TRUE);
-    destroy_nhwindow(win);
-    return;
-}
-
 /* temporary? hack, since level type codes aren't the same as screen
-   symbols and only the latter have easily accessible descriptions */
-const char *levltyp[] = {
+   symbols and only the latter have easily accessible descriptions.
+   Also used by wizcmds.c */
+const char *levltyp[MAX_TYPE + 2] = {
     "stone", "vertical wall", "horizontal wall", "top-left corner wall",
     "top-right corner wall", "bottom-left corner wall",
     "bottom-right corner wall", "cross wall", "tee-up wall", "tee-down wall",
     "tee-left wall", "tee-right wall", "drawbridge wall", "tree",
     "secret door", "secret corridor", "pool", "moat", "water",
-    "drawbridge up", "lava pool", "iron bars", "door", "corridor", "room",
-    "stairs", "ladder", "fountain", "throne", "sink", "grave", "altar", "ice",
-    "drawbridge down", "air", "cloud",
+    "drawbridge up", "lava pool", "lava wall", "iron bars", "door",
+    "corridor", "room", "stairs", "ladder", "fountain", "throne", "sink",
+    "grave", "altar", "ice", "drawbridge down", "air", "cloud",
     /* not a real terrain type, but used for undiggable stone
        by wiz_map_levltyp() */
     "unreachable/undiggable",
@@ -1880,276 +1069,8 @@ levltyp_to_name(int typ)
     return NULL;
 }
 
-DISABLE_WARNING_FORMAT_NONLITERAL
-
-/* explanation of base-36 output from wiz_map_levltyp() */
-static void
-wiz_levltyp_legend(void)
-{
-    winid win;
-    int i, j, last, c;
-    const char *dsc, *fmt;
-    char buf[BUFSZ];
-
-    win = create_nhwindow(NHW_TEXT);
-    putstr(win, 0, "#terrain encodings:");
-    putstr(win, 0, "");
-    fmt = " %c - %-28s"; /* TODO: include tab-separated variant for win32 */
-    *buf = '\0';
-    /* output in pairs, left hand column holds [0],[1],...,[N/2-1]
-       and right hand column holds [N/2],[N/2+1],...,[N-1];
-       N ('last') will always be even, and may or may not include
-       the empty string entry to pad out the final pair, depending
-       upon how many other entries are present in levltyp[] */
-    last = SIZE(levltyp) & ~1;
-    for (i = 0; i < last / 2; ++i)
-        for (j = i; j < last; j += last / 2) {
-            dsc = levltyp[j];
-            c = !*dsc ? ' '
-                   : !strncmp(dsc, "unreachable", 11) ? '*'
-                      /* same int-to-char conversion as wiz_map_levltyp() */
-                      : (j < 10) ? '0' + j
-                         : (j < 36) ? 'a' + j - 10
-                            : 'A' + j - 36;
-            Sprintf(eos(buf), fmt, c, dsc);
-            if (j > i) {
-                putstr(win, 0, buf);
-                *buf = '\0';
-            }
-        }
-    display_nhwindow(win, TRUE);
-    destroy_nhwindow(win);
-    return;
-}
-
-RESTORE_WARNING_FORMAT_NONLITERAL
-
-DISABLE_WARNING_CONDEXPR_IS_CONSTANT
-
-/* #wizsmell command - test usmellmon(). */
-static int
-wiz_smell(void)
-{
-    struct monst *mtmp; /* monster being smelled */
-    struct permonst *mptr;
-    int ans, glyph;
-    coord cc; /* screen pos to sniff */
-    boolean is_you;
-
-    cc.x = u.ux;
-    cc.y = u.uy;
-    if (!olfaction(gy.youmonst.data)) {
-        You("are incapable of detecting odors in your present form.");
-        return ECMD_OK;
-    }
-
-    pline("You can move the cursor to a monster that you want to smell.");
-    do {
-        pline("Pick a monster to smell.");
-        ans = getpos(&cc, TRUE, "a monster");
-        if (ans < 0 || cc.x < 0) {
-            return ECMD_CANCEL; /* done */
-        }
-        is_you = FALSE;
-        if (u_at(cc.x, cc.y)) {
-            if (u.usteed) {
-                mptr = u.usteed->data;
-            } else {
-                mptr = gy.youmonst.data;
-                is_you = TRUE;
-            }
-        } else if ((mtmp = m_at(cc.x, cc.y)) != (struct monst *) 0) {
-            mptr = mtmp->data;
-        } else {
-            mptr = (struct permonst *) 0;
-        }
-        /* Buglet: mapping or unmapping "remembered, unseen monster" should
-           cause time to elapse; since we're in wizmode, don't bother */
-        glyph = glyph_at(cc.x, cc.y);
-        /* Is it a monster? */
-        if (mptr) {
-            if (is_you)
-                You("surreptitiously sniff under your %s.", body_part(ARM));
-            if (!usmellmon(mptr))
-                pline("%s to not give off any smell.",
-                      is_you ? "You seem" : "That monster seems");
-            if (!glyph_is_monster(glyph))
-                map_invisible(cc.x, cc.y);
-        } else {
-            You("don't smell any monster there.");
-            if (glyph_is_invisible(glyph))
-                unmap_invisible(cc.x, cc.y);
-        }
-    } while (TRUE);
-    return ECMD_OK;
-}
-
-RESTORE_WARNING_CONDEXPR_IS_CONSTANT
-
-DISABLE_WARNING_FORMAT_NONLITERAL
-
-#define DEFAULT_TIMEOUT_INCR 30
-
-/* #wizinstrinsic command to set some intrinsics for testing */
-static int
-wiz_intrinsic(void)
-{
-    if (wizard) {
-        static const char wizintrinsic[] = "#wizintrinsic";
-        static const char fmt[] = "You are%s %s.";
-        winid win;
-        anything any;
-        char buf[BUFSZ];
-        int i, j, n, amt, typ, p = 0;
-        long oldtimeout, newtimeout;
-        const char *propname;
-        menu_item *pick_list = (menu_item *) 0;
-        int clr = 0;
-
-        any = cg.zeroany;
-        win = create_nhwindow(NHW_MENU);
-        start_menu(win, MENU_BEHAVE_STANDARD);
-        if (iflags.cmdassist) {
-            /* start menu with a subtitle */
-            Sprintf(buf,
-        "[Precede any selection with a count to increment by other than %d.]",
-                    DEFAULT_TIMEOUT_INCR);
-            any.a_int = 0;
-            add_menu(win, &nul_glyphinfo, &any, 0, 0, ATR_NONE, clr, buf,
-                     MENU_ITEMFLAGS_NONE);
-        }
-        for (i = 0; (propname = property_by_index(i, &p)) != 0; ++i) {
-            if (p == HALLUC_RES) {
-                /* Grayswandir vs hallucination; ought to be redone to
-                   use u.uprops[HALLUC].blocked instead of being treated
-                   as a separate property; letting in be manually toggled
-                   even only in wizard mode would be asking for trouble... */
-                continue;
-            }
-            if (p == FIRE_RES) {
-                /* FIRE_RES and properties beyond it (in the propertynames[]
-                   ordering, not their numerical PROP values), can only be
-                   set to timed values here so show a separator */
-                any.a_int = 0;
-                add_menu(win, &nul_glyphinfo, &any, 0, 0,
-                         ATR_NONE, clr, "--", MENU_ITEMFLAGS_NONE);
-            }
-            any.a_int = i + 1; /* +1: avoid 0 */
-            oldtimeout = u.uprops[p].intrinsic & TIMEOUT;
-            if (oldtimeout)
-                Sprintf(buf, "%-27s [%li]", propname, oldtimeout);
-            else
-                Sprintf(buf, "%s", propname);
-            add_menu(win, &nul_glyphinfo, &any, 0, 0, ATR_NONE, clr, buf,
-                     MENU_ITEMFLAGS_NONE);
-        }
-        end_menu(win, "Which intrinsics?");
-        n = select_menu(win, PICK_ANY, &pick_list);
-        destroy_nhwindow(win);
-
-        for (j = 0; j < n; ++j) {
-            i = pick_list[j].item.a_int - 1; /* -1: reverse +1 above */
-            propname = property_by_index(i, &p);
-            oldtimeout = u.uprops[p].intrinsic & TIMEOUT;
-            amt = (pick_list[j].count == -1L) ? DEFAULT_TIMEOUT_INCR
-                                              : (int) pick_list[j].count;
-            if (amt <= 0) /* paranoia */
-                continue;
-            newtimeout = oldtimeout + (long) amt;
-
-            switch (p) {
-            case SICK:
-            case SLIMED:
-            case STONED:
-                if (oldtimeout > 0L && newtimeout > oldtimeout)
-                    newtimeout = oldtimeout;
-                break;
-            }
-
-            switch (p) {
-            case BLINDED:
-                make_blinded(newtimeout, TRUE);
-                break;
-#if 0       /* make_confused() only gives feedback when confusion is
-             * ending so use the 'default' case for it instead */
-            case CONFUSION:
-                make_confused(newtimeout, TRUE);
-                break;
-#endif /*0*/
-            case DEAF:
-                make_deaf(newtimeout, TRUE);
-                break;
-            case HALLUC:
-                make_hallucinated(newtimeout, TRUE, 0L);
-                break;
-            case SICK:
-                typ = !rn2(2) ? SICK_VOMITABLE : SICK_NONVOMITABLE;
-                make_sick(newtimeout, wizintrinsic, TRUE, typ);
-                break;
-            case SLIMED:
-                Sprintf(buf, fmt,
-                        !Slimed ? "" : " still", "turning into slime");
-                make_slimed(newtimeout, buf);
-                break;
-            case STONED:
-                Sprintf(buf, fmt,
-                        !Stoned ? "" : " still", "turning into stone");
-                make_stoned(newtimeout, buf, KILLED_BY, wizintrinsic);
-                break;
-            case STUNNED:
-                make_stunned(newtimeout, TRUE);
-                break;
-            case VOMITING:
-                Sprintf(buf, fmt, !Vomiting ? "" : " still", "vomiting");
-                make_vomiting(newtimeout, FALSE);
-                pline1(buf);
-                break;
-            case WARN_OF_MON:
-                if (!Warn_of_mon) {
-                    gc.context.warntype.speciesidx = PM_GRID_BUG;
-                    gc.context.warntype.species
-                                       = &mons[gc.context.warntype.speciesidx];
-                }
-                goto def_feedback;
-            case GLIB:
-                /* slippery fingers might need a persistent inventory update
-                   so needs more than simple incr_itimeout() but we want
-                   the pline() issued with that */
-                make_glib((int) newtimeout);
-                /*FALLTHRU*/
-            default:
- def_feedback:
-                if (p != GLIB)
-                    incr_itimeout(&u.uprops[p].intrinsic, amt);
-                gc.context.botl = 1; /* have pline() do a status update */
-                pline("Timeout for %s %s %d.", propname,
-                      oldtimeout ? "increased by" : "set to", amt);
-                break;
-            }
-            /* this has to be after incr_timeout() */
-            if (p == LEVITATION || p == FLYING)
-                float_vs_flight();
-        }
-        if (n >= 1)
-            free((genericptr_t) pick_list);
-        docrt();
-    } else
-        pline(unavailcmd, ecname_from_fn(wiz_intrinsic));
-    return ECMD_OK;
-}
-
-RESTORE_WARNING_FORMAT_NONLITERAL
-
-/* #wizrumorcheck command - verify each rumor access */
-static int
-wiz_rumor_check(void)
-{
-    rumor_check();
-    return ECMD_OK;
-}
-
 /* #terrain command -- show known map, inspired by crawl's '|' command */
-static int
+staticfn int
 doterrain(void)
 {
     winid men;
@@ -2157,7 +1078,11 @@ doterrain(void)
     anything any;
     int n;
     int which;
-    int clr = 0;
+    int clr = NO_COLOR;
+
+    /* this used to be done each time vision was recalculated, so would
+       always be up to date (hopefully); now we do it on demand instead */
+    recalc_mapseen();
 
     /*
      * normal play: choose between known map without mons, obj, and traps
@@ -2218,16 +1143,16 @@ doterrain(void)
 
     switch (which) {
     case 1: /* known map */
-        reveal_terrain(0, TER_MAP);
+        reveal_terrain(TER_MAP);
         break;
     case 2: /* known map with known traps */
-        reveal_terrain(0, TER_MAP | TER_TRP);
+        reveal_terrain(TER_MAP | TER_TRP);
         break;
     case 3: /* known map with known traps and objects */
-        reveal_terrain(0, TER_MAP | TER_TRP | TER_OBJ);
+        reveal_terrain(TER_MAP | TER_TRP | TER_OBJ);
         break;
     case 4: /* full map */
-        reveal_terrain(1, TER_MAP);
+        reveal_terrain(TER_MAP | TER_FULL);
         break;
     case 5: /* map internals */
         wiz_map_levltyp();
@@ -2239,6 +1164,176 @@ doterrain(void)
         break;
     }
     return ECMD_OK; /* no time elapses */
+}
+
+/* has hero seen all locations in selection? */
+staticfn boolean
+u_have_seen_whole_selection(struct selectionvar *sel)
+{
+    coordxy x, y;
+    NhRect rect = cg.zeroNhRect;
+
+    selection_getbounds(sel, &rect);
+
+    for (x = rect.lx; x <= rect.hx; x++)
+        for (y = rect.ly; y <= rect.hy; y++)
+            if (isok(x,y) && selection_getpoint(x, y, sel)
+                && glyph_at(x, y) == GLYPH_UNEXPLORED)
+                return FALSE;
+
+    return TRUE;
+}
+
+/* has hero seen all location of the rectangular outline in the selection */
+staticfn boolean
+u_have_seen_bounds_selection(struct selectionvar *sel)
+{
+    coordxy x, y;
+    NhRect rect = cg.zeroNhRect;
+
+    selection_getbounds(sel, &rect);
+
+    for (x = rect.lx; x <= rect.hx; x++) {
+        y = rect.ly;
+        if (isok(x,y) && selection_getpoint(x, y, sel)
+            && glyph_at(x, y) == GLYPH_UNEXPLORED)
+            return FALSE;
+        y = rect.hy;
+        if (isok(x,y) && selection_getpoint(x, y, sel)
+            && glyph_at(x, y) == GLYPH_UNEXPLORED)
+            return FALSE;
+    }
+    for (y = rect.ly; y <= rect.hy; y++) {
+        x = rect.lx;
+        if (isok(x,y) && selection_getpoint(x, y, sel)
+            && glyph_at(x, y) == GLYPH_UNEXPLORED)
+            return FALSE;
+        x = rect.hx;
+        if (isok(x,y) && selection_getpoint(x, y, sel)
+            && glyph_at(x, y) == GLYPH_UNEXPLORED)
+            return FALSE;
+    }
+
+    return TRUE;
+}
+
+/* can hero currently see all locations in the selection */
+staticfn boolean
+u_can_see_whole_selection(struct selectionvar *sel)
+{
+    coordxy x, y;
+    NhRect rect = cg.zeroNhRect;
+
+    selection_getbounds(sel, &rect);
+
+    for (x = rect.lx; x <= rect.hx; x++)
+        for (y = rect.ly; y <= rect.hy; y++)
+            if (isok(x,y) && selection_getpoint(x, y, sel) && !cansee(x, y))
+                return FALSE;
+
+    return TRUE;
+}
+
+/* selection_floofill callback to get all locations in a room */
+staticfn int
+dolookaround_floodfill_findroom(coordxy x, coordxy y)
+{
+    schar typ = levl[x][y].typ;
+
+    if (IS_STWALL(typ) || IS_DOOR(typ) || IS_TREE(typ)
+        || IS_WATERWALL(typ) || typ == LAVAWALL || typ == IRONBARS
+        || typ == SCORR || typ == SDOOR || typ == DRAWBRIDGE_UP)
+        return FALSE;
+    return TRUE;
+}
+
+/* describe the room at x,y */
+staticfn void
+lookaround_known_room(coordxy x, coordxy y)
+{
+    struct selectionvar *sel = selection_new();
+    int rmno = u.urooms[0] - ROOMOFFSET;
+    char qbuf[QBUFSZ];
+
+    set_selection_floodfillchk(dolookaround_floodfill_findroom);
+    selection_floodfill(sel, x, y, TRUE);
+
+    if (!u_at(x, y))
+        set_msg_xy(x, y);
+
+    if (u_have_seen_whole_selection(sel)) {
+        boolean u_in = (boolean) selection_getpoint(x, y, sel);
+
+        You("%s %s %s.",
+            u_at(x, y) && u_in && u_can_see_whole_selection(sel) ? "are in"
+            : (u_at(x, y)) ? "remember this as" : "remember that as",
+            an(selection_size_description(sel, qbuf)),
+            rmno >= 0 ? "room" : "area");
+    } else if (u_have_seen_bounds_selection(sel)) {
+        You("guess %s to be %s %s.",
+            u_at(x, y) ? "this" : "that",
+            an(selection_size_description(sel, qbuf)),
+            rmno >= 0 ? "room" : "area");
+    } else {
+        You("can't guess the size of %s area.",
+            u_at(x, y) ? "this" : "that");
+    }
+    selection_free(sel, TRUE);
+}
+
+/* #lookaround - describe what the hero can see, in text */
+int
+dolookaround(void)
+{
+    coordxy x, y;
+    int tmp_getloc_filter = iflags.getloc_filter;
+    boolean tmp_accessiblemsg = a11y.accessiblemsg;
+    boolean corr_next2u = FALSE;
+
+    a11y.accessiblemsg = TRUE;
+    if (levl[u.ux][u.uy].typ == CORR) {
+        /* In a corridor, mention corridors next to you. */
+        corr_next2u = TRUE;
+        /* TODO: if we know, describe where the corridor goes,
+           perhaps by describing the rooms? */
+    } else if (IS_DOOR(levl[u.ux][u.uy].typ)) {
+        /* In a doorway, describe the rooms next to you */
+        int i;
+
+        for (i = DIR_W; i < N_DIRS; i += 2) {
+            x = u.ux + xdir[i];
+            y = u.uy + ydir[i];
+            if (isok(x, y) && IS_ROOM(levl[x][y].typ))
+                lookaround_known_room(x, y);
+        }
+        corr_next2u = TRUE;
+    } else {
+        lookaround_known_room(u.ux, u.uy);
+    }
+
+    /* TODO: maybe describe stuff outside the current room differently? */
+
+    iflags.getloc_filter = GFILTER_VIEW;
+    for (y = 0; y < ROWNO; y++)
+        for (x = 1; x < COLNO; x++)
+            if (!u_at(x, y)
+                && (gather_locs_interesting(x, y, GLOC_INTERESTING) ||
+                    (corr_next2u && (glyph_at(x,y) == cmap_to_glyph(S_corr)
+                                     || glyph_at(x,y) == cmap_to_glyph(S_litcorr))))) {
+                char buf[BUFSZ];
+                coord cc;
+                int sym = 0;
+                const char *firstmatch = 0;
+
+                cc.x = x, cc.y = y;
+                do_screen_description(cc, TRUE, sym, buf, &firstmatch, NULL);
+                pline_xy(x, y, "%s.", firstmatch);
+            }
+
+    iflags.getloc_filter = tmp_getloc_filter;
+    a11y.accessiblemsg = tmp_accessiblemsg;
+
+    return ECMD_OK;
 }
 
 void
@@ -2506,7 +1601,7 @@ do_repeat(void)
         }
         repeat_copy = cmdq_copy(CQ_REPEAT);
         gi.in_doagain = TRUE;
-        rhack((char *) 0); /* read and execute command */
+        rhack(0); /* read and execute command */
         gi.in_doagain = FALSE;
         cmdq_clear(CQ_REPEAT);
         gc.command_queue[CQ_REPEAT] = repeat_copy;
@@ -2538,6 +1633,10 @@ struct ext_func_tab extcmdlist[] = {
               doattributes, IFBURIED, NULL },
     { '@',    "autopickup", "toggle the 'autopickup' option on/off",
               dotogglepickup, IFBURIED, NULL },
+#ifdef CRASHREPORT
+    { '\0',   "bugreport", "file a bug report",
+              dobugreport, GENERALCMD | NOFUZZERCMD, NULL },
+#endif
     { 'C',    "call", "name a monster, specific object, or type of object",
               docallcmd, IFBURIED, NULL },
     { 'Z',    "cast", "zap (cast) a spell",
@@ -2579,11 +1678,12 @@ struct ext_func_tab extcmdlist[] = {
               dofire, 0, NULL },
     { M('f'), "force", "force a lock",
               doforce, AUTOCOMPLETE, NULL },
-    { ';',    "glance", "show what type of thing a map symbol corresponds to",
-              doquickwhatis, IFBURIED | GENERALCMD, NULL },
     { M('g'), "genocided",
               "list monsters that have been genocided or become extinct",
-              dogenocided, IFBURIED | AUTOCOMPLETE, NULL },
+              dogenocided,
+              IFBURIED | AUTOCOMPLETE | GENERALCMD | CMD_M_PREFIX, NULL },
+    { ';',    "glance", "show what type of thing a map symbol corresponds to",
+              doquickwhatis, IFBURIED | GENERALCMD, NULL },
     { '?',    "help", "give a help message",
               dohelp, IFBURIED | GENERALCMD, NULL },
     { '\0',   "herecmdmenu", "show menu of commands you can do here",
@@ -2610,6 +1710,8 @@ struct ext_func_tab extcmdlist[] = {
               wiz_light_sources, IFBURIED | AUTOCOMPLETE | WIZMODECMD, NULL },
     { ':',    "look", "look at what is here",
               dolook, IFBURIED, NULL },
+    { '\0',   "lookaround", "describe what you can see",
+              dolookaround, IFBURIED | GENERALCMD, NULL },
     { M('l'), "loot", "loot a box on the floor",
               doloot, AUTOCOMPLETE | CMD_M_PREFIX, NULL },
     { '\0',   "migratemons",
@@ -2634,14 +1736,17 @@ struct ext_func_tab extcmdlist[] = {
     { '\0',   "optionsfull", "show all option settings, possibly change them",
               doset, IFBURIED | GENERALCMD | CMD_M_PREFIX, NULL },
     /* #overview used to need autocomplete and has retained that even
-       after being assigned to ^O [old wizard mode ^O is now #wizwhere] */
+       after being assigned to ^O [old wizard mode ^O is now #wizwhere];
+       'm' prefix displays overview as a menu where player can choose a
+       level to supply with an annotation */
     { C('o'), "overview", "show a summary of the explored dungeon",
-              dooverview, IFBURIED | AUTOCOMPLETE | GENERALCMD, NULL },
+              dooverview,
+              IFBURIED | AUTOCOMPLETE | GENERALCMD | CMD_M_PREFIX, NULL },
     /* [should #panic actually autocomplete?] */
     { '\0',   "panic", "test panic routine (fatal to game)",
               wiz_panic, IFBURIED | AUTOCOMPLETE | WIZMODECMD, NULL },
     { 'p',    "pay", "pay your shopping bill",
-              dopay, 0, NULL },
+              dopay, CMD_M_PREFIX, NULL },
     { '|',    "perminv", "scroll persistent inventory display",
               doperminv, IFBURIED | GENERALCMD | NOFUZZERCMD, NULL },
     { ',',    "pickup", "pick up things at the current location",
@@ -2651,7 +1756,7 @@ struct ext_func_tab extcmdlist[] = {
     { M('p'), "pray", "pray to the gods for help",
               dopray, IFBURIED | AUTOCOMPLETE, NULL },
     { C('p'), "prevmsg", "view recent game messages",
-              doprev_message, IFBURIED | GENERALCMD, NULL },
+              doprev_message, IFBURIED | GENERALCMD | CMD_INSANE, NULL },
     { 'P',    "puton", "put on an accessory (ring, amulet, etc)",
               doputon, 0, NULL },
     { 'q',    "quaff", "quaff (drink) something",
@@ -2664,7 +1769,7 @@ struct ext_func_tab extcmdlist[] = {
     { 'r',    "read", "read a scroll or spellbook",
               doread, 0, NULL },
     { C('r'), "redraw", "redraw screen",
-              doredraw, IFBURIED | GENERALCMD, NULL },
+              doredraw, IFBURIED | GENERALCMD | CMD_INSANE, NULL },
     { 'R',    "remove", "remove an accessory (ring, amulet, etc)",
               doremring, 0, NULL },
     { C('a'), "repeat", "repeat a previous command",
@@ -2694,17 +1799,17 @@ struct ext_func_tab extcmdlist[] = {
     { 's',    "search", "search for traps and secret doors",
               dosearch, IFBURIED | CMD_M_PREFIX, "searching" },
     { '*',    "seeall", "show all equipment in use",
-              doprinuse, IFBURIED, NULL },
+              doprinuse, IFBURIED | CMD_M_PREFIX, NULL },
     { AMULET_SYM, "seeamulet", "show the amulet currently worn",
-              dopramulet, IFBURIED, NULL },
+              dopramulet, IFBURIED | CMD_M_PREFIX, NULL },
     { ARMOR_SYM, "seearmor", "show the armor currently worn",
-              doprarm, IFBURIED, NULL },
+              doprarm, IFBURIED | CMD_M_PREFIX, NULL },
     { RING_SYM, "seerings", "show the ring(s) currently worn",
-              doprring, IFBURIED, NULL },
+              doprring, IFBURIED | CMD_M_PREFIX, NULL },
     { TOOL_SYM, "seetools", "show the tools currently in use",
-              doprtool, IFBURIED, NULL },
+              doprtool, IFBURIED | CMD_M_PREFIX, NULL },
     { WEAPON_SYM, "seeweapon", "show the weapon currently wielded",
-              doprwep, IFBURIED, NULL },
+              doprwep, IFBURIED | CMD_M_PREFIX, NULL },
     { '!', "shell", "leave game to enter a sub-shell ('exit' to come back)",
               dosh_core, (IFBURIED | GENERALCMD | NOFUZZERCMD
 #ifndef SHELL
@@ -2713,7 +1818,7 @@ struct ext_func_tab extcmdlist[] = {
                         ), NULL },
     /* $ is like ),=,&c but is not included with *, so not called "seegold" */
     { GOLD_SYM, "showgold", "show gold, possibly shop credit or debt",
-              doprgold, IFBURIED, NULL },
+              doprgold, IFBURIED | CMD_M_PREFIX, NULL },
     { SPBOOK_SYM, "showspells", "list and reorder known spells",
               dovspell, IFBURIED, NULL },
     { '^',    "showtrap", "describe an adjacent, discovered trap",
@@ -2763,7 +1868,8 @@ struct ext_func_tab extcmdlist[] = {
               /* (see comment for dodown() above */
               doup, CMD_M_PREFIX, NULL },
     { M('V'), "vanquished", "list vanquished monsters",
-              dovanquished, IFBURIED | AUTOCOMPLETE | CMD_M_PREFIX, NULL },
+              dovanquished,
+              IFBURIED | AUTOCOMPLETE | GENERALCMD | CMD_M_PREFIX, NULL },
     { M('v'), "version",
               "list compile time options for this version of NetHack",
               doextversion, IFBURIED | AUTOCOMPLETE | GENERALCMD, NULL },
@@ -2792,6 +1898,8 @@ struct ext_func_tab extcmdlist[] = {
 #endif
     { '\0',   "wizcast", "cast any spell",
               dowizcast, IFBURIED | WIZMODECMD, NULL },
+    { '\0',   "wizcustom", "show customized glyphs",
+              wiz_custom, IFBURIED | WIZMODECMD | NOFUZZERCMD, NULL },
     { C('e'), "wizdetect", "reveal hidden things within a small radius",
               wiz_detect, IFBURIED | WIZMODECMD, NULL },
 #if (NH_DEVEL_STATUS != NH_STATUS_RELEASED) || defined(DEBUG)
@@ -2929,7 +2037,7 @@ static const struct {
     { 0, (const char *) 0, FALSE }
 };
 
-int extcmdlist_length = SIZE(extcmdlist) - 1;
+static int extcmdlist_length = SIZE(extcmdlist) - 1;
 
 /* get entry i in the extended commands list. for windowport use. */
 struct ext_func_tab *
@@ -2985,7 +2093,7 @@ get_changed_key_binds(strbuf_t *sbuf)
 }
 
 /* interactive key binding */
-static void
+staticfn void
 handler_rebind_keys_add(boolean keyfirst)
 {
     struct ext_func_tab *ec;
@@ -2996,6 +2104,7 @@ handler_rebind_keys_add(boolean keyfirst)
     char buf[BUFSZ];
     char buf2[QBUFSZ];
     uchar key = '\0';
+    int clr = NO_COLOR;
 
     if (keyfirst) {
         pline("Bind which key? ");
@@ -3017,19 +2126,16 @@ handler_rebind_keys_add(boolean keyfirst)
             Sprintf(buf, "Key '%s' is not bound to anything.",
                     key2txt(key, buf2));
         }
-        add_menu(win, &nul_glyphinfo, &any, '\0', 0, ATR_NONE, 0, buf,
-                 MENU_ITEMFLAGS_NONE);
-        add_menu(win, &nul_glyphinfo, &any, '\0', 0, ATR_NONE, 0, "",
-                 MENU_ITEMFLAGS_NONE);
+        add_menu_str(win, buf);
+        add_menu_str(win, "");
     }
 
     any.a_int = -1;
-    add_menu(win, &nul_glyphinfo, &any, '\0', 0, ATR_NONE, 0, "nothing: unbind the key",
+    add_menu(win, &nul_glyphinfo, &any, '\0', 0, ATR_NONE, clr,
+             "nothing: unbind the key",
              MENU_ITEMFLAGS_NONE);
 
-    any.a_int = 0;
-    add_menu(win, &nul_glyphinfo, &any, '\0', 0, ATR_NONE, 0, "",
-             MENU_ITEMFLAGS_NONE);
+    add_menu_str(win, "");
 
     for (i = 0; i < extcmdlist_length; i++) {
         ec = &extcmdlist[i];
@@ -3039,7 +2145,7 @@ handler_rebind_keys_add(boolean keyfirst)
 
         any.a_int = (i + 1);
         Sprintf(buf, "%s: %s", ec->ef_txt, ec->ef_desc);
-        add_menu(win, &nul_glyphinfo, &any, '\0', 0, ATR_NONE, 0, buf,
+        add_menu(win, &nul_glyphinfo, &any, '\0', 0, ATR_NONE, clr, buf,
              MENU_ITEMFLAGS_NONE);
     }
     if (key)
@@ -3095,6 +2201,7 @@ handler_rebind_keys(void)
     anything any;
     int i, npick;
     menu_item *picks = (menu_item *) 0;
+    int clr = NO_COLOR;
 
 redo_rebind:
 
@@ -3103,15 +2210,15 @@ redo_rebind:
     any = cg.zeroany;
 
     any.a_int = 1;
-    add_menu(win, &nul_glyphinfo, &any, '\0', 0, ATR_NONE, 0, "bind key to a command",
-             MENU_ITEMFLAGS_NONE);
+    add_menu(win, &nul_glyphinfo, &any, '\0', 0, ATR_NONE, clr,
+             "bind key to a command", MENU_ITEMFLAGS_NONE);
     any.a_int = 2;
-    add_menu(win, &nul_glyphinfo, &any, '\0', 0, ATR_NONE, 0, "bind command to a key",
-             MENU_ITEMFLAGS_NONE);
+    add_menu(win, &nul_glyphinfo, &any, '\0', 0, ATR_NONE, clr,
+             "bind command to a key", MENU_ITEMFLAGS_NONE);
     if (count_bind_keys()) {
         any.a_int = 3;
-        add_menu(win, &nul_glyphinfo, &any, '\0', 0, ATR_NONE, 0, "view changed key binds",
-                 MENU_ITEMFLAGS_NONE);
+        add_menu(win, &nul_glyphinfo, &any, '\0', 0, ATR_NONE, clr,
+                 "view changed key binds", MENU_ITEMFLAGS_NONE);
     }
     end_menu(win, "Do what?");
     npick = select_menu(win, PICK_ONE, &picks);
@@ -3301,7 +2408,7 @@ bind_key(uchar key, const char *command)
 }
 
 /* bind key by ext cmd function */
-static boolean
+staticfn boolean
 bind_key_fn(uchar key, int (*fn)(void))
 {
     struct ext_func_tab *extcmd;
@@ -3319,7 +2426,7 @@ bind_key_fn(uchar key, int (*fn)(void))
 }
 
 /* initialize all keyboard commands */
-static void
+staticfn void
 commands_init(void)
 {
     struct ext_func_tab *extcmd;
@@ -3354,7 +2461,7 @@ commands_init(void)
 #endif
 }
 
-static boolean
+staticfn boolean
 keylist_func_has_key(const struct ext_func_tab *extcmd,
                      boolean *skip_keys_used) /* boolean keys_used[256] */
 {
@@ -3370,7 +2477,7 @@ keylist_func_has_key(const struct ext_func_tab *extcmd,
     return FALSE;
 }
 
-static int
+staticfn int
 keylist_putcmds(winid datawin, boolean docount,
                 int incl_flags, int excl_flags,
                 boolean *keys_used) /* boolean keys_used[256] */
@@ -3596,10 +2703,12 @@ cmd_from_dir(int dir, int mode)
     return cmd_from_func(move_funcs[dir][mode]);
 }
 
+/* return the key bound to extended command */
 char
 cmd_from_func(int (*fn)(void))
 {
     int i;
+    char ret = '\0';
 
     /* skip NUL; allowing it would wreak havoc */
     for (i = 1; i < 256; ++i) {
@@ -3613,12 +2722,17 @@ cmd_from_func(int (*fn)(void))
             && !gc.Cmd.num_pad)
             continue;
 
-        if (gc.Cmd.commands[i] && gc.Cmd.commands[i]->ef_funct == fn)
-            return (char) i;
+        if (gc.Cmd.commands[i] && gc.Cmd.commands[i]->ef_funct == fn) {
+            if (i >= ' ' && i <= '~')
+                return (char) i;
+            else {
+                ret = (char) i;
+            }
+        }
     }
     if (gc.Cmd.commands[' '] && gc.Cmd.commands[' ']->ef_funct == fn)
         return ' ';
-    return '\0';
+    return ret;
 }
 
 /* return visual interpretation of the key bound to extended command,
@@ -3644,7 +2758,7 @@ cmd_from_ecname(const char *ecname)
     return cmdnamebuf;
 }
 
-static const char *
+const char *
 ecname_from_fn(int (*fn)(void))
 {
     const struct ext_func_tab *extcmd, *cmdptr = 0;
@@ -3710,723 +2824,6 @@ cmdname_from_func(
     return res;
 }
 
-/*
- * wizard mode sanity_check code
- */
-
-static const char template[] = "%-27s  %4ld  %6ld";
-static const char stats_hdr[] = "                             count  bytes";
-static const char stats_sep[] = "---------------------------  ----- -------";
-
-static int
-size_obj(struct obj *otmp)
-{
-    int sz = (int) sizeof (struct obj);
-
-    if (otmp->oextra) {
-        sz += (int) sizeof (struct oextra);
-        if (ONAME(otmp))
-            sz += (int) strlen(ONAME(otmp)) + 1;
-        if (OMONST(otmp))
-            sz += size_monst(OMONST(otmp), FALSE);
-        if (OMAILCMD(otmp))
-            sz += (int) strlen(OMAILCMD(otmp)) + 1;
-        /* sz += (int) sizeof (unsigned); -- now part of oextra itself */
-    }
-    return sz;
-}
-
-static void
-count_obj(struct obj *chain, long *total_count, long *total_size,
-          boolean top, boolean recurse)
-{
-    long count, size;
-    struct obj *obj;
-
-    for (count = size = 0, obj = chain; obj; obj = obj->nobj) {
-        if (top) {
-            count++;
-            size += size_obj(obj);
-        }
-        if (recurse && obj->cobj)
-            count_obj(obj->cobj, total_count, total_size, TRUE, TRUE);
-    }
-    *total_count += count;
-    *total_size += size;
-}
-
-DISABLE_WARNING_FORMAT_NONLITERAL  /* RESTORE_WARNING follows show_wiz_stats */
-
-static void
-obj_chain(
-    winid win,
-    const char *src,
-    struct obj *chain,
-    boolean force,
-    long *total_count, long *total_size)
-{
-    char buf[BUFSZ];
-    long count = 0L, size = 0L;
-
-    count_obj(chain, &count, &size, TRUE, FALSE);
-
-    if (count || size || force) {
-        *total_count += count;
-        *total_size += size;
-        Sprintf(buf, template, src, count, size);
-        putstr(win, 0, buf);
-    }
-}
-
-static void
-mon_invent_chain(
-    winid win,
-    const char *src,
-    struct monst *chain,
-    long *total_count, long *total_size)
-{
-    char buf[BUFSZ];
-    long count = 0, size = 0;
-    struct monst *mon;
-
-    for (mon = chain; mon; mon = mon->nmon)
-        count_obj(mon->minvent, &count, &size, TRUE, FALSE);
-
-    if (count || size) {
-        *total_count += count;
-        *total_size += size;
-        Sprintf(buf, template, src, count, size);
-        putstr(win, 0, buf);
-    }
-}
-
-static void
-contained_stats(
-    winid win,
-    const char *src,
-    long *total_count, long *total_size)
-{
-    char buf[BUFSZ];
-    long count = 0, size = 0;
-    struct monst *mon;
-
-    count_obj(gi.invent, &count, &size, FALSE, TRUE);
-    count_obj(fobj, &count, &size, FALSE, TRUE);
-    count_obj(gl.level.buriedobjlist, &count, &size, FALSE, TRUE);
-    count_obj(gm.migrating_objs, &count, &size, FALSE, TRUE);
-    /* DEADMONSTER check not required in this loop since they have no
-     * inventory */
-    for (mon = fmon; mon; mon = mon->nmon)
-        count_obj(mon->minvent, &count, &size, FALSE, TRUE);
-    for (mon = gm.migrating_mons; mon; mon = mon->nmon)
-        count_obj(mon->minvent, &count, &size, FALSE, TRUE);
-
-    if (count || size) {
-        *total_count += count;
-        *total_size += size;
-        Sprintf(buf, template, src, count, size);
-        putstr(win, 0, buf);
-    }
-}
-
-static int
-size_monst(struct monst *mtmp, boolean incl_wsegs)
-{
-    int sz = (int) sizeof (struct monst);
-
-    if (mtmp->wormno && incl_wsegs)
-        sz += size_wseg(mtmp);
-
-    if (mtmp->mextra) {
-        sz += (int) sizeof (struct mextra);
-        if (MGIVENNAME(mtmp))
-            sz += (int) strlen(MGIVENNAME(mtmp)) + 1;
-        if (EGD(mtmp))
-            sz += (int) sizeof (struct egd);
-        if (EPRI(mtmp))
-            sz += (int) sizeof (struct epri);
-        if (ESHK(mtmp))
-            sz += (int) sizeof (struct eshk);
-        if (EMIN(mtmp))
-            sz += (int) sizeof (struct emin);
-        if (EDOG(mtmp))
-            sz += (int) sizeof (struct edog);
-        /* mextra->mcorpsenm doesn't point to more memory */
-    }
-    return sz;
-}
-
-static void
-mon_chain(
-    winid win,
-    const char *src,
-    struct monst *chain,
-    boolean force,
-    long *total_count, long *total_size)
-{
-    char buf[BUFSZ];
-    long count, size;
-    struct monst *mon;
-    /* mon->wormno means something different for migrating_mons and mydogs */
-    boolean incl_wsegs = !strcmpi(src, "fmon");
-
-    count = size = 0L;
-    for (mon = chain; mon; mon = mon->nmon) {
-        count++;
-        size += size_monst(mon, incl_wsegs);
-    }
-    if (count || size || force) {
-        *total_count += count;
-        *total_size += size;
-        Sprintf(buf, template, src, count, size);
-        putstr(win, 0, buf);
-    }
-}
-
-static void
-misc_stats(
-    winid win,
-    long *total_count, long *total_size)
-{
-    char buf[BUFSZ], hdrbuf[QBUFSZ];
-    long count, size;
-    int idx;
-    struct trap *tt;
-    struct damage *sd; /* shop damage */
-    struct kinfo *k; /* delayed killer */
-    struct cemetery *bi; /* bones info */
-
-    /* traps and engravings are output unconditionally;
-     * others only if nonzero
-     */
-    count = size = 0L;
-    for (tt = gf.ftrap; tt; tt = tt->ntrap) {
-        ++count;
-        size += (long) sizeof *tt;
-    }
-    *total_count += count;
-    *total_size += size;
-    Sprintf(hdrbuf, "traps, size %ld", (long) sizeof (struct trap));
-    Sprintf(buf, template, hdrbuf, count, size);
-    putstr(win, 0, buf);
-
-    count = size = 0L;
-    engr_stats("engravings, size %ld+text", hdrbuf, &count, &size);
-    *total_count += count;
-    *total_size += size;
-    Sprintf(buf, template, hdrbuf, count, size);
-    putstr(win, 0, buf);
-
-    count = size = 0L;
-    light_stats("light sources, size %ld", hdrbuf, &count, &size);
-    if (count || size) {
-        *total_count += count;
-        *total_size += size;
-        Sprintf(buf, template, hdrbuf, count, size);
-        putstr(win, 0, buf);
-    }
-
-    count = size = 0L;
-    timer_stats("timers, size %ld", hdrbuf, &count, &size);
-    if (count || size) {
-        *total_count += count;
-        *total_size += size;
-        Sprintf(buf, template, hdrbuf, count, size);
-        putstr(win, 0, buf);
-    }
-
-    count = size = 0L;
-    for (sd = gl.level.damagelist; sd; sd = sd->next) {
-        ++count;
-        size += (long) sizeof *sd;
-    }
-    if (count || size) {
-        *total_count += count;
-        *total_size += size;
-        Sprintf(hdrbuf, "shop damage, size %ld",
-                (long) sizeof (struct damage));
-        Sprintf(buf, template, hdrbuf, count, size);
-        putstr(win, 0, buf);
-    }
-
-    count = size = 0L;
-    region_stats("regions, size %ld+%ld*rect+N", hdrbuf, &count, &size);
-    if (count || size) {
-        *total_count += count;
-        *total_size += size;
-        Sprintf(buf, template, hdrbuf, count, size);
-        putstr(win, 0, buf);
-    }
-
-    count = size = 0L;
-    for (k = gk.killer.next; k; k = k->next) {
-        ++count;
-        size += (long) sizeof *k;
-    }
-    if (count || size) {
-        *total_count += count;
-        *total_size += size;
-        Sprintf(hdrbuf, "delayed killer%s, size %ld",
-                plur(count), (long) sizeof (struct kinfo));
-        Sprintf(buf, template, hdrbuf, count, size);
-        putstr(win, 0, buf);
-    }
-
-    count = size = 0L;
-    for (bi = gl.level.bonesinfo; bi; bi = bi->next) {
-        ++count;
-        size += (long) sizeof *bi;
-    }
-    if (count || size) {
-        *total_count += count;
-        *total_size += size;
-        Sprintf(hdrbuf, "bones history, size %ld",
-                (long) sizeof (struct cemetery));
-        Sprintf(buf, template, hdrbuf, count, size);
-        putstr(win, 0, buf);
-    }
-
-    count = size = 0L;
-    for (idx = 0; idx < NUM_OBJECTS; ++idx)
-        if (objects[idx].oc_uname) {
-            ++count;
-            size += (long) (strlen(objects[idx].oc_uname) + 1);
-        }
-    if (count || size) {
-        *total_count += count;
-        *total_size += size;
-        Strcpy(hdrbuf, "object type names, text");
-        Sprintf(buf, template, hdrbuf, count, size);
-        putstr(win, 0, buf);
-    }
-}
-
-/* the #stats command
- * Display memory usage of all monsters and objects on the level.
- */
-static int
-wiz_show_stats(void)
-{
-    char buf[BUFSZ];
-    winid win;
-    long total_obj_size, total_obj_count,
-         total_mon_size, total_mon_count,
-         total_ovr_size, total_ovr_count,
-         total_misc_size, total_misc_count;
-
-    win = create_nhwindow(NHW_TEXT);
-    putstr(win, 0, "Current memory statistics:");
-
-    total_obj_count = total_obj_size = 0L;
-    putstr(win, 0, stats_hdr);
-    Sprintf(buf, "  Objects, base size %ld", (long) sizeof (struct obj));
-    putstr(win, 0, buf);
-    obj_chain(win, "invent", gi.invent, TRUE,
-              &total_obj_count, &total_obj_size);
-    obj_chain(win, "fobj", fobj, TRUE, &total_obj_count, &total_obj_size);
-    obj_chain(win, "buried", gl.level.buriedobjlist, FALSE,
-              &total_obj_count, &total_obj_size);
-    obj_chain(win, "migrating obj", gm.migrating_objs, FALSE,
-              &total_obj_count, &total_obj_size);
-    obj_chain(win, "billobjs", gb.billobjs, FALSE,
-              &total_obj_count, &total_obj_size);
-    mon_invent_chain(win, "minvent", fmon, &total_obj_count, &total_obj_size);
-    mon_invent_chain(win, "migrating minvent", gm.migrating_mons,
-                     &total_obj_count, &total_obj_size);
-    contained_stats(win, "contained", &total_obj_count, &total_obj_size);
-    putstr(win, 0, stats_sep);
-    Sprintf(buf, template, "  Obj total", total_obj_count, total_obj_size);
-    putstr(win, 0, buf);
-
-    total_mon_count = total_mon_size = 0L;
-    putstr(win, 0, "");
-    Sprintf(buf, "  Monsters, base size %ld", (long) sizeof (struct monst));
-    putstr(win, 0, buf);
-    mon_chain(win, "fmon", fmon, TRUE, &total_mon_count, &total_mon_size);
-    mon_chain(win, "migrating", gm.migrating_mons, FALSE,
-              &total_mon_count, &total_mon_size);
-    /* 'gm.mydogs' is only valid during level change or end of game disclosure,
-       but conceivably we've been called from within debugger at such time */
-    if (gm.mydogs) /* monsters accompanying hero */
-        mon_chain(win, "mydogs", gm.mydogs, FALSE,
-                  &total_mon_count, &total_mon_size);
-    putstr(win, 0, stats_sep);
-    Sprintf(buf, template, "  Mon total", total_mon_count, total_mon_size);
-    putstr(win, 0, buf);
-
-    total_ovr_count = total_ovr_size = 0L;
-    putstr(win, 0, "");
-    putstr(win, 0, "  Overview");
-    overview_stats(win, template, &total_ovr_count, &total_ovr_size);
-    putstr(win, 0, stats_sep);
-    Sprintf(buf, template, "  Over total", total_ovr_count, total_ovr_size);
-    putstr(win, 0, buf);
-
-    total_misc_count = total_misc_size = 0L;
-    putstr(win, 0, "");
-    putstr(win, 0, "  Miscellaneous");
-    misc_stats(win, &total_misc_count, &total_misc_size);
-    putstr(win, 0, stats_sep);
-    Sprintf(buf, template, "  Misc total", total_misc_count, total_misc_size);
-    putstr(win, 0, buf);
-
-    putstr(win, 0, "");
-    putstr(win, 0, stats_sep);
-    Sprintf(buf, template, "  Grand total",
-            (total_obj_count + total_mon_count
-             + total_ovr_count + total_misc_count),
-            (total_obj_size + total_mon_size
-             + total_ovr_size + total_misc_size));
-    putstr(win, 0, buf);
-
-#if defined(__BORLANDC__) && !defined(_WIN32)
-    show_borlandc_stats(win);
-#endif
-
-    display_nhwindow(win, FALSE);
-    destroy_nhwindow(win);
-    return ECMD_OK;
-}
-
-RESTORE_WARNING_FORMAT_NONLITERAL
-
-#if (NH_DEVEL_STATUS != NH_STATUS_RELEASED) || defined(DEBUG)
-/* the #wizdispmacros command
- * Verify that some display macros are returning sane values */
-static int
-wiz_display_macros(void)
-{
-    static const char display_issues[] = "Display macro issues:";
-    char buf[BUFSZ];
-    winid win;
-    int glyph, test, trouble = 0, no_glyph = NO_GLYPH, max_glyph = MAX_GLYPH;
-
-    win = create_nhwindow(NHW_TEXT);
-
-    for (glyph = 0; glyph < MAX_GLYPH; ++glyph) {
-        /* glyph_is_cmap / glyph_to_cmap() */
-        if (glyph_is_cmap(glyph)) {
-            test = glyph_to_cmap(glyph);
-            /* check for MAX_GLYPH return */
-            if (test == no_glyph) {
-                if (!trouble++)
-                    putstr(win, 0, display_issues);
-                Sprintf(buf, "glyph_is_cmap() / glyph_to_cmap(glyph=%d)"
-                             " sync failure, returned NO_GLYPH (%d)",
-                        glyph, test);
-                 putstr(win, 0, buf);
-            }
-            if (glyph_is_cmap_zap(glyph)
-                && !(test >= S_vbeam && test <= S_rslant)) {
-                if (!trouble++)
-                    putstr(win, 0, display_issues);
-                Sprintf(buf,
-                        "glyph_is_cmap_zap(glyph=%d) returned non-zap cmap %d",
-                        glyph, test);
-                 putstr(win, 0, buf);
-            }
-            /* check against defsyms array subscripts */
-            if (test < 0 || test >= SIZE(defsyms)) {
-                if (!trouble++)
-                    putstr(win, 0, display_issues);
-                Sprintf(buf, "glyph_to_cmap(glyph=%d) returns %d"
-                             " exceeds defsyms[%d] bounds (MAX_GLYPH = %d)",
-                        glyph, test, SIZE(defsyms), max_glyph);
-                putstr(win, 0, buf);
-            }
-        }
-        /* glyph_is_monster / glyph_to_mon */
-        if (glyph_is_monster(glyph)) {
-            test = glyph_to_mon(glyph);
-            /* check against mons array subscripts */
-            if (test < 0 || test >= NUMMONS) {
-                if (!trouble++)
-                    putstr(win, 0, display_issues);
-                Sprintf(buf, "glyph_to_mon(glyph=%d) returns %d"
-                             " exceeds mons[%d] bounds",
-                        glyph, test, NUMMONS);
-                putstr(win, 0, buf);
-            }
-        }
-        /* glyph_is_object / glyph_to_obj */
-        if (glyph_is_object(glyph)) {
-            test = glyph_to_obj(glyph);
-            /* check against objects array subscripts */
-            if (test < 0 || test > NUM_OBJECTS) {
-                if (!trouble++)
-                    putstr(win, 0, display_issues);
-                Sprintf(buf, "glyph_to_obj(glyph=%d) returns %d"
-                             " exceeds objects[%d] bounds",
-                        glyph, test, NUM_OBJECTS);
-                putstr(win, 0, buf);
-            }
-        }
-    }
-    if (!trouble)
-        putstr(win, 0, "No display macro issues detected.");
-    display_nhwindow(win, FALSE);
-    destroy_nhwindow(win);
-    return ECMD_OK;
-}
-#endif /* (NH_DEVEL_STATUS != NH_STATUS_RELEASED) || defined(DEBUG) */
-
-#if (NH_DEVEL_STATUS != NH_STATUS_RELEASED) || defined(DEBUG)
-/* the #wizmondiff command */
-static int
-wiz_mon_diff(void)
-{
-    static const char window_title[] = "Review of monster difficulty ratings"
-                                       " [index:level]:";
-    char buf[BUFSZ];
-    winid win;
-    int mhardcoded = 0, mcalculated = 0, trouble = 0, cnt = 0, mdiff = 0;
-    int mlev;
-    struct permonst *ptr;
-
-    /*
-     * Possible extension:  choose between showing discrepancies,
-     * showing all monsters, or monsters within a particular class.
-     */
-
-    win = create_nhwindow(NHW_TEXT);
-    for (ptr = &mons[0]; ptr->mlet; ptr++, cnt++) {
-        mcalculated = mstrength(ptr);
-        mhardcoded = (int) ptr->difficulty;
-        mdiff = mhardcoded - mcalculated;
-        if (mdiff) {
-            if (!trouble++)
-                putstr(win, 0, window_title);
-            mlev = (int) ptr->mlevel;
-            if (mlev > 50) /* hack for named demons */
-                mlev = 50;
-            Snprintf(buf, sizeof buf,
-                     "%-18s [%3d:%2d]: calculated: %2d, hardcoded: %2d (%+d)",
-                     ptr->pmnames[NEUTRAL], cnt, mlev,
-                     mcalculated, mhardcoded, mdiff);
-            putstr(win, 0, buf);
-        }
-    }
-    if (!trouble)
-        putstr(win, 0, "No monster difficulty discrepencies were detected.");
-    display_nhwindow(win, FALSE);
-    destroy_nhwindow(win);
-    return ECMD_OK;
-}
-#endif /* (NH_DEVEL_STATUS != NH_STATUS_RELEASED) || defined(DEBUG) */
-
-static void
-you_sanity_check(void)
-{
-    struct monst *mtmp;
-
-    if (u.uswallow && !u.ustuck) {
-        /* this probably ought to be panic() */
-        impossible("sanity_check: swallowed by nothing?");
-        display_nhwindow(WIN_MESSAGE, TRUE);
-        /* try to recover from whatever the problem is */
-        u.uswallow = 0;
-        u.uswldtim = 0;
-        docrt();
-    }
-    if ((mtmp = m_at(u.ux, u.uy)) != 0) {
-        /* u.usteed isn't on the map */
-        if (u.ustuck != mtmp)
-            impossible("sanity_check: you over monster");
-    }
-
-    (void) check_invent_gold("invent");
-}
-
-void
-sanity_check(void)
-{
-    you_sanity_check();
-    obj_sanity_check();
-    timer_sanity_check();
-    mon_sanity_check();
-    light_sources_sanity_check();
-    bc_sanity_check();
-    trap_sanity_check();
-}
-
-/* qsort() comparison routine for use in list_migrating_mons() */
-static int QSORTCALLBACK
-migrsort_cmp(const genericptr vptr1, const genericptr vptr2)
-{
-    const struct monst *m1 = *(const struct monst **) vptr1,
-                       *m2 = *(const struct monst **) vptr2;
-    int d1 = (int) m1->mux, l1 = (int) m1->muy,
-        d2 = (int) m2->mux, l2 = (int) m2->muy;
-
-    /* if different branches, sort by dungeon number */
-    if (d1 != d2)
-        return d1 - d2;
-    /* within same branch, sort by level number */
-    if (l1 != l2)
-        return l1 - l2;
-    /* same destination level:  use a tie-breaker to force stable sort;
-       monst->m_id is unsigned so we need more than just simple subtraction */
-    return (m1->m_id < m2->m_id) ? -1 : (m1->m_id > m2->m_id);
-}
-
-/* called by #migratemons; displays count of migrating monsters, optionally
-   displays them as well */
-static void
-list_migrating_mons(
-    d_level *nextlevl) /* default destination for wiz_migrate_mons() */
-{
-    winid win = WIN_ERR;
-    boolean showit = FALSE;
-    unsigned n;
-    int xyloc;
-    coordxy x, y;
-    char c, prmpt[10], xtra[10], buf[BUFSZ];
-    struct monst *mtmp, **marray;
-    int here = 0, nxtlv = 0, other = 0;
-
-    for (mtmp = gm.migrating_mons; mtmp; mtmp = mtmp->nmon) {
-        if (mtmp->mux == u.uz.dnum && mtmp->muy == u.uz.dlevel)
-            ++here;
-        else if (mtmp->mux == nextlevl->dnum && mtmp->muy == nextlevl->dlevel)
-            ++nxtlv;
-        else
-            ++other;
-    }
-    if (here + nxtlv + other == 0) {
-        pline("No monsters currently migrating.");
-    } else {
-        pline(
-      "%d mon%s pending for current level, %d for next level, %d for others.",
-              here, plur(here), nxtlv, other);
-        prmpt[0] = xtra[0] = '\0';
-        (void) strkitten(here ? prmpt : xtra, 'c');
-        (void) strkitten(nxtlv ? prmpt : xtra, 'n');
-        (void) strkitten(other ? prmpt : xtra, 'o');
-        Strcat(prmpt, "a q");
-        if (*xtra)
-            Sprintf(eos(prmpt), "%c%s", '\033', xtra);
-        c = yn_function("List which?", prmpt, 'q', TRUE);
-        n = (c == 'c') ? here
-            : (c == 'n') ? nxtlv
-              : (c == 'o') ? other
-                : (c == 'a') ? here + nxtlv + other
-                  : 0;
-        if (n > 0) {
-            win = create_nhwindow(NHW_TEXT);
-            switch (c) {
-            case 'c':
-            case 'n':
-            case 'o':
-                Sprintf(buf, "Monster%s migrating to %s:", plur(n),
-                        (c == 'c') ? "current level"
-                        : (c == 'n') ? "next level"
-                          : "'other' levels");
-                break;
-            default:
-                Strcpy(buf, "All migrating monsters:");
-                break;
-            }
-            putstr(win, 0, buf);
-            putstr(win, 0, "");
-            /* collect the migrating monsters into an array; for 'o' and 'a'
-               where multiple destination levels might be present, sort by
-               the destination; 'c' and 'n' don't need to be sorted but we
-               do that anyway to get the same tie-breaker as 'o' and 'a' */
-            marray = (struct monst **) alloc((n + 1) * sizeof *marray);
-            n = 0;
-            for (mtmp = gm.migrating_mons; mtmp; mtmp = mtmp->nmon) {
-                if (c == 'a')
-                    showit = TRUE;
-                else if (mtmp->mux == u.uz.dnum && mtmp->muy == u.uz.dlevel)
-                    showit = (c == 'c');
-                else if (mtmp->mux == nextlevl->dnum
-                         && mtmp->muy == nextlevl->dlevel)
-                    showit = (c == 'n');
-                else
-                    showit = (c == 'o');
-
-                if (showit)
-                    marray[n++] = mtmp;
-            }
-            marray[n] = (struct monst *) 0; /* mark end for traversal loop */
-            if (n > 1)
-                qsort((genericptr_t) marray, (size_t) n, sizeof *marray,
-                      migrsort_cmp); /* sort elements [0] through [n-1] */
-            for (n = 0; (mtmp = marray[n]) != 0; ++n) {
-                Sprintf(buf, "  %s", minimal_monnam(mtmp, FALSE));
-                /* minimal_monnam() appends map coordinates; strip that */
-                (void) strsubst(buf, " <0,0>", "");
-                if (has_mgivenname(mtmp)) /* if mtmp is named, include that */
-                    Sprintf(eos(buf), " named %s", MGIVENNAME(mtmp));
-                if (c == 'o' || c == 'a')
-                    Sprintf(eos(buf), " to %d:%d", mtmp->mux, mtmp->muy);
-                xyloc = mtmp->mtrack[0].x; /* (for legibility) */
-                if (xyloc == MIGR_EXACT_XY) {
-                    x = mtmp->mtrack[1].x;
-                    y = mtmp->mtrack[1].y;
-                    Sprintf(eos(buf), " at <%d,%d>", (int) x, (int) y);
-                }
-                putstr(win, 0, buf);
-            }
-            free((genericptr_t) marray);
-            display_nhwindow(win, FALSE);
-            destroy_nhwindow(win);
-        } else if (c != 'q') {
-            pline("None.");
-        }
-
-    }
-}
-
-/* #migratemons command */
-static int
-wiz_migrate_mons(void)
-{
-#ifdef DEBUG_MIGRATING_MONS
-    int mcount;
-    char inbuf[BUFSZ];
-    struct permonst *ptr;
-    struct monst *mtmp;
-#endif
-    d_level tolevel;
-
-    if (Is_stronghold(&u.uz))
-        assign_level(&tolevel, &valley_level);
-    else if (!Is_botlevel(&u.uz))
-        get_level(&tolevel, depth(&u.uz) + 1);
-    else
-        tolevel.dnum = 0, tolevel.dlevel = 0;
-
-    list_migrating_mons(&tolevel);
-
-#ifdef DEBUG_MIGRATING_MONS
-    inbuf[0] = '\033', inbuf[1] = '\0';
-    if (tolevel.dnum || tolevel.dlevel)
-        getlin("How many random monsters to migrate to next level? [0]",
-               inbuf);
-    else
-        pline("Can't get there from here.");
-    if (*inbuf == '\033')
-        return ECMD_OK;
-
-    mcount = atoi(inbuf);
-    if (mcount < 1)
-        mcount = 0;
-    else if (mcount > ((COLNO - 1) * ROWNO))
-        mcount = (COLNO - 1) * ROWNO;
-
-    while (mcount > 0) {
-        ptr = rndmonst();
-        mtmp = makemon(ptr, 0, 0, MM_NOMSG);
-        if (mtmp)
-            migrate_to_level(mtmp, ledger_no(&tolevel), MIGR_RANDOM,
-                             (coord *) 0);
-        mcount--;
-    }
-#endif /* DEBUG_MIGRATING_MONS */
-    return ECMD_OK;
-}
-
 static struct {
     int nhkf;
     uchar key;
@@ -4477,7 +2874,7 @@ bind_specialkey(uchar key, const char *command)
     return FALSE;
 }
 
-static const char *
+staticfn const char *
 spkey_name(int nhkf)
 {
     const char *name = 0;
@@ -4517,7 +2914,7 @@ void
 parseautocomplete(char *autocomplete, boolean condition)
 {
     struct ext_func_tab *efp;
-    register char *autoc;
+    char *autoc;
 
     /* break off first autocomplete from the rest; parse the rest */
     if ((autoc = strchr(autocomplete, ',')) != 0
@@ -4745,7 +3142,7 @@ update_rest_on_space(void)
 /* commands which accept 'm' prefix to request menu operation or other
    alternate behavior; it's also overloaded for move-without-autopickup;
    there is no overlap between the two groups of commands */
-static boolean
+staticfn boolean
 accept_menu_prefix(const struct ext_func_tab *ec)
 {
     return (ec && ((ec->flags & CMD_M_PREFIX) != 0));
@@ -4833,7 +3230,7 @@ rnd_extcmd_idx(void)
     return rn2(extcmdlist_length + 1) - 1;
 }
 
-static void
+staticfn void
 reset_cmd_vars(boolean reset_cmdq)
 {
     gc.context.run = 0;
@@ -4854,10 +3251,9 @@ reset_cmd_vars(boolean reset_cmdq)
 }
 
 void
-rhack(char *cmd)
+rhack(int key)
 {
-    char queuedkeystroke[2];
-    boolean bad_command, firsttime = (cmd == 0);
+    boolean bad_command, firsttime = (key == 0);
     struct _cmd_queue cq, *cmdq = NULL;
     const struct ext_func_tab *cmdq_ec = 0, *prefix_seen = 0;
     boolean was_m_prefix = FALSE;
@@ -4875,23 +3271,21 @@ rhack(char *cmd)
         free(cmdq);
         if (cq.typ == CMDQ_EXTCMD && (cmdq_ec = cq.ec_entry) != 0)
             goto do_cmdq_extcmd;
-        cmd = queuedkeystroke;
         /* already handled a queued command (goto do_cmdq_extcmd);
            if something other than a key is queued, we'll drop down
            to the !*cmd handling which clears out the command-queue */
-        cmd[0] = (cq.typ == CMDQ_KEY) ? cq.key : '\0';
-        cmd[1] = '\0';
+        key = (cq.typ == CMDQ_KEY) ? cq.key : 0;
     } else if (firsttime) {
-        cmd = parse();
+        key = parse();
         /* parse() pushed a cmd but didn't return any key */
-        if (!*cmd && cmdq_peek(CQ_CANNED))
+        if (!key && cmdq_peek(CQ_CANNED))
             goto got_prefix_input;
     }
 
     /* if there's no command, there's nothing to do except reset */
-    if (!cmd || !*cmd || *cmd == (char) 0377
-        || *cmd == gc.Cmd.spkeys[NHKF_ESC]) {
-        if (!cmd || *cmd != gc.Cmd.spkeys[NHKF_ESC])
+    if (!key || key == (char) 0377
+        || key == gc.Cmd.spkeys[NHKF_ESC]) {
+        if (!key || key != gc.Cmd.spkeys[NHKF_ESC])
             nhbell();
         reset_cmd_vars(TRUE);
         return;
@@ -4900,16 +3294,16 @@ rhack(char *cmd)
     /* handle most movement commands */
     gc.context.travel = gc.context.travel1 = 0;
     {
-        register const struct ext_func_tab *tlist;
+        const struct ext_func_tab *tlist;
         int res, (*func)(void);
 
  do_cmdq_extcmd:
         if (cmdq_ec)
             tlist = cmdq_ec;
         else
-            tlist = gc.Cmd.commands[*cmd & 0xff];
+            tlist = gc.Cmd.commands[key & 0xff];
 
-        /* current - use *cmd to directly index cmdlist array */
+        /* current - use key to directly index cmdlist array */
         if (tlist != 0) {
             if (!can_do_extcmd(tlist)) {
                 /* can_do_extcmd() already gave a message */
@@ -4934,9 +3328,9 @@ rhack(char *cmd)
                     pline("The %s command does not accept '%s' prefix.",
                           tlist->ef_txt, which);
                 } else {
-                    uchar key = tlist->key;
-                    boolean up = (key == '<' || tlist->ef_funct == doup),
-                            down = (key == '>' || tlist->ef_funct == dodown);
+                    uchar ch = tlist->key;
+                    boolean up = (ch == '<' || tlist->ef_funct == doup),
+                            down = (ch == '>' || tlist->ef_funct == dodown);
 
                     pline(
                 "The '%s' prefix should be followed by a movement command%s.",
@@ -4963,6 +3357,12 @@ rhack(char *cmd)
                         cmdq_clear(CQ_REPEAT);
                     }
                 }
+                /* some commands shouldn't trigger sanity_check() because
+                   if it produces output that might interfere with them;
+                   note: if sanity_check is False, this has no effect */
+                if ((tlist->flags & CMD_INSANE) != 0)
+                    iflags.sanity_no_check = iflags.sanity_check;
+
                 res = (*func)(); /* perform the command */
                 /* if 'func' is doextcmd(), 'tlist' is for Cmd.commands['#']
                    rather than for the command that doextcmd() just ran;
@@ -5045,22 +3445,7 @@ rhack(char *cmd)
     }
 
     if (bad_command) {
-        char expcmd[20]; /* we expect 'cmd' to point to 1 or 2 chars */
-        char c, c1 = cmd[1];
-
-        expcmd[0] = '\0';
-        while ((c = *cmd++) != '\0')
-            Strcat(expcmd, visctrl(c)); /* add 1..4 chars plus terminator */
-#if 1
-        nhUse(c1);
-#else
-        /* note: since prefix keys became actual commnads, we can no longer
-           get here with 'prefix_seen' set so this never calls help_dir()
-           anymore */
-        if (!prefix_seen
-            || !help_dir(c1, prefix_seen->key, "Invalid direction key!"))
-#endif
-            Norep("Unknown command '%s'.", expcmd);
+        Norep("Unknown command '%s'.", visctrl(key));
         cmdq_clear(CQ_CANNED);
         cmdq_clear(CQ_REPEAT);
     }
@@ -5074,7 +3459,7 @@ rhack(char *cmd)
 coordxy
 xytod(coordxy x, coordxy y)
 {
-    register int dd;
+    int dd;
 
     for (dd = 0; dd < N_DIRS; dd++)
         if (x == xdir[dd] && y == ydir[dd])
@@ -5098,8 +3483,8 @@ movecmd(char sym, int mode)
 {
     int d = DIR_ERR;
 
-    if (gc.Cmd.commands[(uchar)sym]) {
-        int (*fnc)(void) = gc.Cmd.commands[(uchar)sym]->ef_funct;
+    if (gc.Cmd.commands[(uchar) sym]) {
+        int (*fnc)(void) = gc.Cmd.commands[(uchar) sym]->ef_funct;
 
         if (mode == MV_ANY) {
             for (d = N_DIRS_Z - 1; d > DIR_ERR; d--)
@@ -5206,7 +3591,7 @@ getdir(const char *s)
     }
 
  retry:
-    gp.program_state.getting_a_command = 1; /* arrow key support for curses */
+    gp.program_state.input_state = getdirInp;
     if (gi.in_doagain || *readchar_queue)
         dirsym = readchar();
     else
@@ -5294,7 +3679,8 @@ getdir(const char *s)
                 break;
             }
         }
-        iflags.getdir_click = mod;
+        if (iflags.getdir_click)
+            iflags.getdir_click = mod;
         return (pos >= 0);
     } else if (!(is_mov = movecmd(dirsym, MV_ANY)) && !u.dz) {
         boolean did_help = FALSE, help_requested;
@@ -5322,7 +3708,7 @@ getdir(const char *s)
     return 1;
 }
 
-static void
+staticfn void
 show_direction_keys(
     winid win, /* should specify a window which is using a fixed-width font */
     char centerchar, /* '.' or '@' or ' ' */
@@ -5371,7 +3757,7 @@ show_direction_keys(
 /* explain choices if player has asked for getdir() help or has given
    an invalid direction after a prefix key ('F', 'g', 'm', &c), which
    might be bogus but could be up, down, or self when not applicable */
-static boolean
+staticfn boolean
 help_dir(
     char sym,
     uchar spkey, /* actual key; either prefix or ESC */
@@ -5504,11 +3890,13 @@ void
 confdir(boolean force_impairment)
 {
     if (force_impairment || u_maybe_impaired()) {
-        int x = NODIAG(u.umonnum) ? (int) dirs_ord[rn2(4)] : rn2(N_DIRS);
+        int kmax = NODIAG(u.umonnum) ? (N_DIRS / 2) : N_DIRS,
+            k = (int) dirs_ord[rn2(kmax)];
 
-        u.dx = xdir[x];
-        u.dy = ydir[x];
+        u.dx = xdir[k];
+        u.dy = ydir[k];
     }
+    return;
 }
 
 const char *
@@ -5525,14 +3913,14 @@ directionname(int dir)
 }
 
 int
-isok(register coordxy x, register coordxy y)
+isok(coordxy x, coordxy y)
 {
     /* x corresponds to curx, so x==1 is the first column. Ach. %% */
     return x >= 1 && x <= COLNO - 1 && y >= 0 && y <= ROWNO - 1;
 }
 
 /* #herecmdmenu command */
-static int
+staticfn int
 doherecmdmenu(void)
 {
     char ch = here_cmd_menu();
@@ -5541,7 +3929,7 @@ doherecmdmenu(void)
 }
 
 /* #therecmdmenu command, a way to test there_cmd_menu without mouse */
-static int
+staticfn int
 dotherecmdmenu(void)
 {
     char ch;
@@ -5557,6 +3945,7 @@ dotherecmdmenu(void)
         else
             ch = there_cmd_menu(x, y, iflags.getdir_click);
         gc.clicklook_cc.x = gc.clicklook_cc.y = -1;
+        iflags.getdir_click = 0;
         return (ch && ch != '\033') ? ECMD_TIME : ECMD_OK;
     }
 
@@ -5618,11 +4007,11 @@ enum menucmd {
     MCMD_TRAVEL,
 };
 
-static void
+staticfn void
 mcmd_addmenu(winid win, int act, const char *txt)
 {
     anything any;
-    int clr = 0;
+    int clr = NO_COLOR;
 
     /* TODO: fixed letters for the menu entries? */
     any = cg.zeroany;
@@ -5632,7 +4021,7 @@ mcmd_addmenu(winid win, int act, const char *txt)
 }
 
 /* command menu entries when targeting self */
-static int
+staticfn int
 there_cmd_menu_self(winid win, coordxy x, coordxy y, int *act UNUSED)
 {
     int K = 0;
@@ -5721,7 +4110,7 @@ there_cmd_menu_self(winid win, coordxy x, coordxy y, int *act UNUSED)
 }
 
 /* add entries to there_cmd_menu, when x,y is next to hero */
-static int
+staticfn int
 there_cmd_menu_next2u(
     winid win,
     coordxy x, coordxy y,
@@ -5821,7 +4210,7 @@ there_cmd_menu_next2u(
     return K;
 }
 
-static int
+staticfn int
 there_cmd_menu_far(winid win, coordxy x, coordxy y, int mod)
 {
     int K = 0;
@@ -5836,7 +4225,7 @@ there_cmd_menu_far(winid win, coordxy x, coordxy y, int mod)
     return K;
 }
 
-static int
+staticfn int
 there_cmd_menu_common(
     winid win,
     coordxy x, coordxy y,
@@ -5855,7 +4244,7 @@ there_cmd_menu_common(
 }
 
 /* queue up command(s) to perform #therecmdmenu action */
-static void
+staticfn void
 act_on_act(
     int act,                /* action */
     coordxy dx, coordxy dy) /* delta to adjacent spot (farther sometimes) */
@@ -5879,7 +4268,7 @@ act_on_act(
 
     switch (act) {
     case MCMD_TRAVEL:
-        /* FIXME: player has explicilty picked "travel to this location"
+        /* FIXME: player has explicitly picked "travel to this location"
            from the menu but it will only work if flags.travelcmd is True.
            That option is intended as way to guard against stray mouse
            clicks and shouldn't inhibit explicit travel. */
@@ -6040,7 +4429,7 @@ act_on_act(
 
 /* offer choice of actions to perform at adjacent location <x,y>;
    a few choices can be farther away */
-static char
+staticfn char
 there_cmd_menu(coordxy x, coordxy y, int mod)
 {
     winid win;
@@ -6096,7 +4485,7 @@ there_cmd_menu(coordxy x, coordxy y, int mod)
     return ch;
 }
 
-static char
+staticfn char
 here_cmd_menu(void)
 {
     there_cmd_menu(u.ux, u.uy, CLICK_1);
@@ -6113,7 +4502,7 @@ click_to_cmd(coordxy x, coordxy y, int mod)
         cmdq_add_ec(CQ_CANNED, gc.Cmd.mousebtn[mod-1]->ef_funct);
 }
 
-static int
+staticfn int
 domouseaction(void)
 {
     coordxy x, y;
@@ -6216,7 +4605,7 @@ get_count(
     unsigned gc_flags)   /* control flags: GC_SAVEHIST, GC_ECHOFIRST */
 {
     char qbuf[QBUFSZ];
-    int key;
+    int key, save_input_state = gp.program_state.input_state;
     long cnt = 0L, first = inkey ? (long) (inkey - '0') : 0L;
     boolean backspaced = FALSE, showzero = TRUE,
             /* should "Count: 123" go into message history? */
@@ -6236,8 +4625,9 @@ get_count(
             key = inkey;
             inkey = '\0';
         } else {
-            gp.program_state.getting_a_command = 1; /* readchar altmeta
-                                                     * compatibility */
+            /* if readchar() has already been called in this loop, it will
+               have reset input_state; put that back to its previous value */
+            gp.program_state.input_state = save_input_state;
             key = readchar();
         }
 
@@ -6287,19 +4677,19 @@ get_count(
 }
 
 
-static char *
+staticfn int
 parse(void)
 {
-    register int foo;
+    int foo;
 
     iflags.in_parse = TRUE;
     gc.command_count = 0;
     gc.context.move = TRUE; /* assume next command will take game time */
     flush_screen(1); /* Flush screen buffer. Put the cursor on the hero. */
 
-    gp.program_state.getting_a_command = 1; /* affects readchar() behavior for
-                                             * ESC iff 'altmeta' option is On;
-                                             * reset to 0 by readchar() */
+    /* affects readchar() behavior for ESC iff 'altmeta' option is On;
+       reset to 0 by readchar() */
+    gp.program_state.input_state = commandInp;
     if (!gc.Cmd.num_pad || (foo = readchar()) == gc.Cmd.spkeys[NHKF_COUNT]) {
         foo = get_count((char *) 0, '\0', LARGEST_INT,
                         &gc.command_count, GC_NOFLAGS);
@@ -6328,12 +4718,11 @@ parse(void)
     if (gm.multi)
         gm.multi--;
 
-    gc.command_line[0] = foo;
-    gc.command_line[1] = '\0';
+    gc.cmd_key = foo;
     clear_nhwindow(WIN_MESSAGE);
 
     iflags.in_parse = FALSE;
-    return gc.command_line;
+    return gc.cmd_key;
 }
 
 #ifdef HANGUPHANDLING
@@ -6350,7 +4739,7 @@ hangup(
         gp.program_state.in_moveloop = 0;
     nhwindows_hangup();
 #ifdef SAFERHANGUP
-    /* When using SAFERHANGUP, the done_hup flag it tested in rhack
+    /* When using SAFERHANGUP, the done_hup flag is tested in rhack
        and a couple of other places; actual hangup handling occurs then.
        This is 'safer' because it disallows certain cheats and also
        protects against losing objects in the process of being thrown,
@@ -6392,13 +4781,15 @@ end_of_input(void)
 }
 #endif /* HANGUPHANDLING */
 
-static char
+staticfn char
 readchar_core(coordxy *x, coordxy *y, int *mod)
 {
-    register int sym;
+    int sym;
 
-    if (iflags.debug_fuzzer)
-        return randomkey();
+    if (iflags.debug_fuzzer) {
+        sym = randomkey();
+        goto readchar_done;
+    }
     if (*readchar_queue)
         sym = *readchar_queue++;
     else if (gi.in_doagain)
@@ -6408,7 +4799,7 @@ readchar_core(coordxy *x, coordxy *y, int *mod)
 
 #ifdef NR_OF_EOFS
     if (sym == EOF) {
-        register int cnt = NR_OF_EOFS;
+        int cnt = NR_OF_EOFS;
         /*
          * Some SYSV systems seem to return EOFs for various reasons
          * (?like when one hits break or for interrupted systemcalls?),
@@ -6428,9 +4819,11 @@ readchar_core(coordxy *x, coordxy *y, int *mod)
         sym = '\033';
 #ifdef ALTMETA
     } else if (sym == '\033' && iflags.altmeta
-               && gp.program_state.getting_a_command) {
+               && gp.program_state.input_state != otherInp) {
         /* iflags.altmeta: treat two character ``ESC c'' as single `M-c' but
-           only when we're called by parse() [possibly via get_count()] */
+           only when we're called by parse() [possibly via get_count()]
+           or getpos() [to support Alt+digit] or getdir() [for arrow keys
+           under curses] */
         sym = *readchar_queue ? *readchar_queue++ : pgetchar();
         if (sym == EOF || sym == 0)
             sym = '\033';
@@ -6442,12 +4835,15 @@ readchar_core(coordxy *x, coordxy *y, int *mod)
         gc.clicklook_cc.x = gc.clicklook_cc.y = -1;
         click_to_cmd(*x, *y, *mod);
     }
-    gp.program_state.getting_a_command = 0; /* next readchar() will be for an
-                                             * ordinary char unless parse()
-                                             * sets this back to 1 */
+
+ readchar_done:
+    /* next readchar() will be for an ordinary char unless parse()
+       sets this back to non-zero */
+    gp.program_state.input_state = otherInp;
     return (char) sym;
 }
 
+/* get a character */
 char
 readchar(void)
 {
@@ -6459,23 +4855,25 @@ readchar(void)
     return ch;
 }
 
+/* used by getpos() to accept mouse input as well as keyboard input */
 char
 readchar_poskey(coordxy *x, coordxy *y, int *mod)
 {
     char ch;
 
+    gp.program_state.input_state = getposInp;
     ch = readchar_core(x, y, mod);
     return ch;
 }
 
 /* '_' command, #travel, via keyboard rather than mouse click */
-static int
+staticfn int
 dotravel(void)
 {
     coord cc;
 
     /*
-     * Travelling used to be a no-op if user toggled 'travel' option
+     * Traveling used to be a no-op if user toggled 'travel' option
      * Off.  However, travel was initially implemented as a mouse-only
      * command and the original purpose of the option was to be able
      * to prevent clicks on the map from initiating travel.
@@ -6518,11 +4916,20 @@ dotravel(void)
 }
 
 /* #retravel, travel to iflags.travelcc, which must be set */
-static int
+staticfn int
 dotravel_target(void)
 {
-    if (!isok(iflags.travelcc.x, iflags.travelcc.y))
+    if (!isok(iflags.travelcc.x, iflags.travelcc.y)) {
+        /* assume <0,0>, the value assigned when travel reaches destination */
+        pline("No travel destination set.");
         return ECMD_OK;
+    } else if (u_at(iflags.travelcc.x, iflags.travelcc.y)) {
+        /* maybe interrupted while traveling then just walked rest of way
+           so destination hasn't been reset yet */
+        You("are already here.");
+        iflags.travelcc.x = iflags.travelcc.y = 0;
+        return ECMD_OK;
+    }
 
     iflags.getloc_travelmode = FALSE;
 
@@ -6542,7 +4949,7 @@ dotravel_target(void)
 }
 
 /* mouse click look command */
-static int
+staticfn int
 doclicklook(void)
 {
     if (!isok(gc.clicklook_cc.x, gc.clicklook_cc.y))
@@ -6552,6 +4959,76 @@ doclicklook(void)
     auto_describe(gc.clicklook_cc.x, gc.clicklook_cc.y);
 
     return ECMD_OK;
+}
+
+/* can we use menu entries to respond to a query? */
+staticfn boolean
+yn_menuable_resp(const char *resp)
+{
+    return iflags.query_menu && iflags.window_inited
+        && (resp == ynchars || resp == ynqchars || resp == ynaqchars
+            || resp == rightleftchars);
+}
+
+staticfn void
+yn_func_menu_opt(winid win, char key, const char *text, char def)
+{
+    anything any;
+
+    any = cg.zeroany;
+    any.a_char = key;
+    add_menu(win, &nul_glyphinfo, &any, key, 0,
+             ATR_NONE, NO_COLOR, text,
+             (def == key) ? MENU_ITEMFLAGS_SELECTED
+                          : MENU_ITEMFLAGS_NONE);
+
+}
+
+/* use a menu to ask a specific response to a query.
+   returns TRUE if the menu was shown to the user.
+   puts the response char into res. */
+staticfn boolean
+yn_function_menu(
+    const char *query,
+    const char *resp,
+    char def,
+    char *res)
+{
+    if (yn_menuable_resp(resp)) {
+        winid win = create_nhwindow(NHW_MENU);
+        menu_item *sel;
+        int n;
+        char keybuf[QBUFSZ];
+
+        start_menu(win, MENU_BEHAVE_STANDARD);
+        if (resp == rightleftchars) {
+            yn_func_menu_opt(win, 'r', "Right", def);
+            yn_func_menu_opt(win, 'l', "Left", def);
+        } else {
+            yn_func_menu_opt(win, 'y', "Yes", def);
+            yn_func_menu_opt(win, 'n', "No", def);
+        }
+        if (resp == ynaqchars)
+            yn_func_menu_opt(win, 'a', "All", def);
+        if (resp == ynqchars || resp == ynaqchars)
+            yn_func_menu_opt(win, 'q', "Quit", def);
+        end_menu(win, query);
+        n = select_menu(win, PICK_ONE, &sel);
+        destroy_nhwindow(win);
+        if (n > 0) {
+            *res = sel[0].item.a_char;
+            /* two were selected? use the one that wasn't the default */
+            if (n > 1 && *res == def)
+                *res = sel[1].item.a_char;
+            free((genericptr_t) sel);
+        } else {
+            *res = def;
+        }
+        pline("%s %s", query, key2txt(*res, keybuf));
+        clear_nhwindow(WIN_MESSAGE);
+        return TRUE;
+    }
+    return FALSE;
 }
 
 /*
@@ -6568,7 +5045,7 @@ yn_function(
 {
     char res = '\033', qbuf[QBUFSZ];
     struct _cmd_queue cq, *cmdq;
-#ifdef DUMPLOG
+#ifdef DUMPLOG_CORE
     unsigned idx = gs.saved_pline_index;
     /* buffer to hold query+space+formatted_single_char_response */
     char dumplog_buf[QBUFSZ + 1 + 15]; /* [QBUFSZ+1+7] should suffice */
@@ -6605,12 +5082,14 @@ yn_function(
             gp.pline_flags &= ~PLINE_SPEECH;
         }
 #endif
-        res = (*windowprocs.win_yn_function)(query, resp, def);
+        if (!yn_function_menu(query, resp, def, &res)) {
+            res = (*windowprocs.win_yn_function)(query, resp, def);
+        }
         if (addcmdq)
             cmdq_add_key(CQ_REPEAT, res);
     }
 
-#ifdef DUMPLOG
+#ifdef DUMPLOG_CORE
     if (idx == gs.saved_pline_index) {
         /* when idx is still the same as gs.saved_pline_index, the interface
            didn't put the prompt into gs.saved_plines[]; we put a simplified
@@ -6620,22 +5099,33 @@ yn_function(
         dumplogmsg(dumplog_buf);
     }
 #endif
+    /* in case we're called via getdir() which sets input_state */
+    gp.program_state.input_state = otherInp;
     return res;
 }
 
-/* for paranoid_confirm:quit,die,attack prompting */
-boolean
-paranoid_query(boolean be_paranoid, const char *prompt)
+/* for paranoid_confirm:quit,die,attack,&c prompting; allows yes, n|no,
+   or q|quit; result is one of 'y' or 'n' or 'q'; ESC yields 'q' */
+char
+paranoid_ynq(
+    boolean be_paranoid,
+    const char *prompt,
+    boolean accept_q)
 {
-    boolean confirmed_ok;
+    char c = 'n'; /* default result */
 
     /* when paranoid, player must respond with "yes" rather than just 'y'
        to give the go-ahead for this query; default is "no" unless the
        ParanoidConfirm flag is set in which case there's no default */
     if (be_paranoid) {
         char pbuf[BUFSZ], qbuf[QBUFSZ], ans[BUFSZ];
-        const char *promptprefix = "",
-                *responsetype = ParanoidConfirm ? "[yes|no]" : "[yes|n] (n)";
+        const char *promptprefix = "", /* empty for first iteration */
+            *responsetype = ParanoidConfirm ? (accept_q ? "[yes|no|quit]"
+                                               : "[yes|no]")
+                                            /* default of 'n' is shown for
+                                             * the !ParanoidConfirm cases */
+                                            : (accept_q ? "[yes|n|q] (n)"
+                                               : "[yes|n] (n)");
         int k, trylimit = 6; /* 1 normal, 5 more with "Yes or No:" prefix */
 
         copynchars(pbuf, prompt, BUFSZ - 1);
@@ -6652,24 +5142,43 @@ paranoid_query(boolean be_paranoid, const char *prompt)
                 Strcpy(pbuf + (QBUFSZ - 1) - k - 4, "...?"); /* -4: "...?" */
             }
 
-            Snprintf(qbuf, sizeof(qbuf), "%s%s %s", promptprefix, pbuf,
+            Snprintf(qbuf, sizeof qbuf, "%s%s %s", promptprefix, pbuf,
                      responsetype);
             *ans = '\0';
             getlin(qbuf, ans);
             (void) mungspaces(ans);
-            confirmed_ok = !strcmpi(ans, "yes");
-            if (confirmed_ok || *ans == '\033')
+            if (!strcmpi(ans, "yes")) {
+                c = 'y';
                 break;
+            }
+            if (!strcmpi(ans, "quit") || *ans == '\033') {
+                c = 'q';
+                break;
+            }
+            /* we don't bother adding "or \"Quit\"" for the accept_q case */
             promptprefix = "\"Yes\" or \"No\": ";
+            /* for empty input, return value c will already be 'n' */
         } while (ParanoidConfirm && strcmpi(ans, "no") && --trylimit);
+    } else if (accept_q) {
+        c = ynq(prompt); /* 'y', 'n', or 'q' */
     } else {
-        confirmed_ok = (y_n(prompt) == 'y');
+        c = y_n(prompt); /* 'y' or 'n' */
     }
-    return confirmed_ok;
+    if (c != 'y' && (c != 'q' || !accept_q))
+        c = 'n';
+    return c;
+}
+
+/* for paranoid_confirm:quit,die,attack,&c prompting; allows yes or n|no;
+   result is True for yes; n|no and ESC yield False */
+boolean
+paranoid_query(boolean be_paranoid, const char *prompt)
+{
+    return (paranoid_ynq(be_paranoid, prompt, FALSE) == 'y');
 }
 
 /* ^Z command, #suspend */
-static int
+staticfn int
 dosuspend_core(void)
 {
 #ifdef SUSPEND
@@ -6689,7 +5198,7 @@ dosuspend_core(void)
 }
 
 /* '!' command, #shell */
-static int
+staticfn int
 dosh_core(void)
 {
 #ifdef SHELL

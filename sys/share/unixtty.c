@@ -38,7 +38,6 @@
 #endif /* POSIX_TYPES */
 #ifdef LINUX
 #include <sys/ioctl.h>
-#undef delay_output /* curses redefines this */
 #include <curses.h>
 #endif
 #define kill_sym c_cc[VKILL]
@@ -310,7 +309,7 @@ setftty(void)
     start_screen();
 }
 
-void intron(void) /* enable kbd interupts if enabled when game started */
+void intron(void) /* enable kbd interrupts if enabled when game started */
 {
 #ifdef TTY_GRAPHICS
     /* Ugly hack to keep from changing tty modes for non-tty games -dlc */
@@ -394,10 +393,8 @@ init_sco_cons(void)
         load_symset("IBMGraphics", PRIMARYSET);
         load_symset("RogueIBM", ROGUESET);
         switch_symbols(TRUE);
-#ifdef TEXTCOLOR
         if (has_colors())
             iflags.use_color = TRUE;
-#endif
     }
 #endif
 }
@@ -451,10 +448,8 @@ init_linux_cons(void)
     if (WINDOWPORT(tty) && linux_flag_console) {
         atexit(linux_mapon);
         linux_mapoff();
-#ifdef TEXTCOLOR
         if (has_colors())
             iflags.use_color = TRUE;
-#endif
     }
 #endif
 }

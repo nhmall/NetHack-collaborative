@@ -1,4 +1,4 @@
-/* NetHack 3.7	artifact.c	$NHDT-Date: 1654717838 2022/06/08 19:50:38 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.190 $ */
+/* NetHack 3.7	artifact.c	$NHDT-Date: 1702064500 2023/12/08 19:41:40 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.214 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2013. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -14,20 +14,25 @@
  *        the contents, just the total size.
  */
 
-#define get_artifact(o) \
-    (((o) && (o)->oartifact) ? &artilist[(int) (o)->oartifact] : 0)
+static struct artifact *get_artifact(struct obj *) NONNULL; /* never returns null */
 
-static boolean bane_applies(const struct artifact *, struct monst *);
-static int spec_applies(const struct artifact *, struct monst *);
-static int invoke_ok(struct obj *);
-static int arti_invoke(struct obj *);
-static boolean Mb_hit(struct monst * magr, struct monst *mdef,
+/* #define get_artifact(o) \
+    (((o) && ((o)->artifact > 0 && (o)->artifact < AFTER_LAST_ARTIFACT)) \
+                             ? &artilist[(int) (o)->oartifact] \
+                             : &artilist[ART_NONARTIFACT]) */
+
+staticfn boolean bane_applies(const struct artifact *, struct monst *)
+                      NONNULLARG12;
+staticfn int spec_applies(const struct artifact *, struct monst *) NONNULLARG12;
+staticfn int invoke_ok(struct obj *);
+staticfn int arti_invoke(struct obj *);
+staticfn boolean Mb_hit(struct monst * magr, struct monst *mdef,
                       struct obj *, int *, int, boolean, char *);
-static unsigned long abil_to_spfx(long *);
-static uchar abil_to_adtyp(long *);
-static int glow_strength(int);
-static boolean untouchable(struct obj *, boolean);
-static int count_surround_traps(coordxy, coordxy);
+staticfn unsigned long abil_to_spfx(long *) NONNULLARG1;
+staticfn uchar abil_to_adtyp(long *) NONNULLARG1;
+staticfn int glow_strength(int);
+staticfn boolean untouchable(struct obj *, boolean);
+staticfn int count_surround_traps(coordxy, coordxy);
 
 /* The amount added to the victim's total hit points to insure that the
    victim will be killed even after damage bonus/penalty adjustments.
@@ -65,11 +70,10 @@ static xint16 artidisco[NROFARTIFACTS];
  */
 static const struct arti_info zero_artiexist = {0}; /* all bits zero */
 
-static void hack_artifacts(void);
-static boolean attacks(int, struct obj *);
+staticfn void hack_artifacts(void);
 
 /* handle some special cases; must be called after u_init() */
-static void
+staticfn void
 hack_artifacts(void)
 {
     struct artifact *art;
@@ -137,7 +141,7 @@ artiname(int artinum)
    into an artifact of matching type, or returned as-is if that's not
    possible.
    For the 2nd case, caller should use ``obj = mk_artifact(obj, A_NONE);''
-   for the 1st, ``obj = mk_artifact((struct obj *)0, some_alignment);''.
+   for the 1st, ``obj = mk_artifact((struct obj *) 0, some_alignment);''.
  */
 struct obj *
 mk_artifact(
@@ -241,8 +245,8 @@ artifact_name(
     short *otyp_p,    /* secondary output */
     boolean fuzzy)    /* whether to allow extra or omitted spaces or dashes */
 {
-    register const struct artifact *a;
-    register const char *aname;
+    const struct artifact *a;
+    const char *aname;
 
     if (!strncmpi(name, "the ", 4))
         name += 4;
@@ -265,7 +269,7 @@ artifact_name(
 boolean
 exist_artifact(int otyp, const char *name)
 {
-    register const struct artifact *a;
+    const struct artifact *a;
     struct arti_info *arex;
 
     if (otyp && *name)
@@ -284,7 +288,7 @@ artifact_exists(
     boolean mod,      /* True: exists, False: being un-created */
     unsigned flgs)    /* ONAME_xyz flags; not relevant if !mod */
 {
-    register const struct artifact *a;
+    const struct artifact *a;
 
     if (otmp && *name)
         for (a = artilist + 1; a->otyp; a++)
@@ -427,7 +431,8 @@ spec_ability(struct obj *otmp, unsigned long abil)
 {
     const struct artifact *arti = get_artifact(otmp);
 
-    return (boolean) (arti && (arti->spfx & abil) != 0L);
+    return (boolean) (arti != &artilist[ART_NONARTIFACT]
+                      && (arti->spfx & abil) != 0L);
 }
 
 /* used so that callers don't need to known about SPFX_ codes */
@@ -447,7 +452,7 @@ arti_reflects(struct obj *obj)
 {
     const struct artifact *arti = get_artifact(obj);
 
-    if (arti) {
+    if (arti != &artilist[ART_NONARTIFACT]) {
         /* while being worn */
         if ((obj->owornmask & ~W_ART) && (arti->spfx & SPFX_REFLECT))
             return TRUE;
@@ -470,7 +475,8 @@ shade_glare(struct obj *obj)
         return TRUE;
     /* non-silver artifacts with bonus against undead also are effective */
     arti = get_artifact(obj);
-    if (arti && (arti->spfx & SPFX_DFLAG2) && arti->mtype == M2_UNDEAD)
+    if (arti != &artilist[ART_NONARTIFACT] && (arti->spfx & SPFX_DFLAG2)
+                             && arti->mtype == M2_UNDEAD)
         return TRUE;
     /* [if there was anything with special bonus against noncorporeals,
        it would be effective too] */
@@ -482,7 +488,7 @@ shade_glare(struct obj *obj)
 boolean
 restrict_name(struct obj *otmp, const char *name)
 {
-    register const struct artifact *a;
+    const struct artifact *a;
     const char *aname, *odesc, *other;
     boolean sametype[NUM_OBJECTS];
     int i, lo, hi, otyp = otmp->otyp, ocls = objects[otyp].oc_class;
@@ -530,12 +536,12 @@ restrict_name(struct obj *otmp, const char *name)
     return FALSE;
 }
 
-static boolean
+boolean
 attacks(int adtyp, struct obj *otmp)
 {
     const struct artifact *weap;
 
-    if ((weap = get_artifact(otmp)) != 0)
+    if ((weap = get_artifact(otmp)) != &artilist[ART_NONARTIFACT])
         return (boolean) (weap->attk.adtyp == adtyp);
     return FALSE;
 }
@@ -543,11 +549,11 @@ attacks(int adtyp, struct obj *otmp)
 boolean
 defends(int adtyp, struct obj *otmp)
 {
-    struct artifact *weap;
+    const struct artifact *weap;
 
     if (!otmp)
         return FALSE;
-    if ((weap = get_artifact(otmp)) != 0)
+    if ((weap = get_artifact(otmp)) != &artilist[ART_NONARTIFACT])
         return (boolean) (weap->defn.adtyp == adtyp);
     if (Is_dragon_armor(otmp)) {
         int otyp = otmp->otyp;
@@ -596,7 +602,7 @@ defends_when_carried(int adtyp, struct obj *otmp)
 {
     const struct artifact *weap;
 
-    if ((weap = get_artifact(otmp)) != 0)
+    if ((weap = get_artifact(otmp)) != &artilist[ART_NONARTIFACT])
         return (boolean) (weap->cary.adtyp == adtyp);
     return FALSE;
 }
@@ -610,7 +616,7 @@ protects(struct obj *otmp, boolean being_worn)
     if (being_worn && objects[otmp->otyp].oc_oprop == PROTECTION)
         return TRUE;
     arti = get_artifact(otmp);
-    if (!arti)
+    if (arti == &artilist[ART_NONARTIFACT])
         return FALSE;
     return (boolean) ((arti->cspfx & SPFX_PROTECT) != 0
                       || (being_worn && (arti->spfx & SPFX_PROTECT) != 0));
@@ -624,12 +630,12 @@ void
 set_artifact_intrinsic(struct obj *otmp, boolean on, long wp_mask)
 {
     long *mask = 0;
-    register const struct artifact *art, *oart = get_artifact(otmp);
-    register struct obj *obj;
-    register uchar dtyp;
-    register long spfx;
+    const struct artifact *art, *oart = get_artifact(otmp);
+    struct obj *obj;
+    uchar dtyp;
+    long spfx;
 
-    if (!oart)
+    if (oart == &artilist[ART_NONARTIFACT])
         return;
 
     /* effects from the defn field */
@@ -656,7 +662,8 @@ set_artifact_intrinsic(struct obj *otmp, boolean on, long wp_mask)
         for (obj = gi.invent; obj; obj = obj->nobj) {
             if (obj != otmp && obj->oartifact) {
                 art = get_artifact(obj);
-                if (art && art->cary.adtyp == dtyp) {
+                if (art != &artilist[ART_NONARTIFACT]
+                        && art->cary.adtyp == dtyp) {
                     mask = (long *) 0;
                     break;
                 }
@@ -677,7 +684,7 @@ set_artifact_intrinsic(struct obj *otmp, boolean on, long wp_mask)
         for (obj = gi.invent; obj; obj = obj->nobj)
             if (obj != otmp && obj->oartifact) {
                 art = get_artifact(obj);
-                if (art)
+                if (art != &artilist[ART_NONARTIFACT])
                     spfx &= ~art->cspfx;
             }
     }
@@ -803,11 +810,11 @@ static boolean touch_blasted; /* for retouch_object() */
 int
 touch_artifact(struct obj *obj, struct monst *mon)
 {
-    register const struct artifact *oart = get_artifact(obj);
+    const struct artifact *oart = get_artifact(obj);
     boolean badclass, badalign, self_willed, yours;
 
     touch_blasted = FALSE;
-    if (!oart)
+    if (oart == &artilist[ART_NONARTIFACT])
         return 1;
 
     yours = (mon == &gy.youmonst);
@@ -874,9 +881,9 @@ touch_artifact(struct obj *obj, struct monst *mon)
 boolean
 arti_immune(struct obj *obj, int dtyp)
 {
-    register const struct artifact *weap = get_artifact(obj);
+    const struct artifact *weap = get_artifact(obj);
 
-    if (!weap)
+    if (weap == &artilist[ART_NONARTIFACT])
         return FALSE;
     if (dtyp == AD_PHYS)
         return FALSE; /* nothing is immune to phys dmg */
@@ -885,12 +892,13 @@ arti_immune(struct obj *obj, int dtyp)
                       || weap->cary.adtyp == dtyp);
 }
 
-static boolean
+staticfn boolean
 bane_applies(const struct artifact *oart, struct monst *mon)
 {
     struct artifact atmp;
 
-    if (oart && (oart->spfx & SPFX_DBONUS) != 0) {
+    if (oart != &artilist[ART_NONARTIFACT]
+            && (oart->spfx & SPFX_DBONUS) != 0) {
         atmp = *oart;
         atmp.spfx &= SPFX_DBONUS; /* clear other spfx fields */
         if (spec_applies(&atmp, mon))
@@ -900,7 +908,7 @@ bane_applies(const struct artifact *oart, struct monst *mon)
 }
 
 /* decide whether an artifact's special attacks apply against mtmp */
-static int
+staticfn int
 spec_applies(const struct artifact *weap, struct monst *mtmp)
 {
     struct permonst *ptr;
@@ -922,7 +930,7 @@ spec_applies(const struct artifact *weap, struct monst *mtmp)
         return ((ptr->mflags2 & weap->mtype)
                 || (yours
                     && ((!Upolyd && (gu.urace.selfmask & weap->mtype))
-                        || ((weap->mtype & M2_WERE) && u.ulycn >= LOW_PM))));
+                        || ((weap->mtype & M2_WERE) && ismnum(u.ulycn)))));
     } else if (weap->spfx & SPFX_DALIGN) {
         return yours ? (u.ualign.type != weap->alignment)
                      : (ptr->maligntyp == A_NONE
@@ -961,7 +969,7 @@ spec_m2(struct obj *otmp)
 {
     const struct artifact *artifact = get_artifact(otmp);
 
-    if (artifact)
+    if (artifact != &artilist[ART_NONARTIFACT])
         return artifact->mtype;
     return 0L;
 }
@@ -975,7 +983,8 @@ spec_abon(struct obj *otmp, struct monst *mon)
     /* no need for an extra check for `NO_ATTK' because this will
        always return 0 for any artifact which has that attribute */
 
-    if (weap && weap->attk.damn && spec_applies(weap, mon))
+    if (weap != &artilist[ART_NONARTIFACT]
+            && weap->attk.damn && spec_applies(weap, mon))
         return rnd((int) weap->attk.damn);
     return 0;
 }
@@ -984,9 +993,10 @@ spec_abon(struct obj *otmp, struct monst *mon)
 int
 spec_dbon(struct obj *otmp, struct monst *mon, int tmp)
 {
-    register const struct artifact *weap = get_artifact(otmp);
+    const struct artifact *weap = get_artifact(otmp);
 
-    if (!weap || (weap->attk.adtyp == AD_PHYS /* check for `NO_ATTK' */
+    if ((weap == &artilist[ART_NONARTIFACT])
+        || (weap->attk.adtyp == AD_PHYS /* check for `NO_ATTK' */
                   && weap->attk.damn == 0 && weap->attk.damd == 0))
         gs.spec_dbon_applies = FALSE;
     else if (is_art(otmp, ART_GRIMTOOTH))
@@ -1037,7 +1047,8 @@ undiscovered_artifact(xint16 m)
 
 /* display a list of discovered artifacts; return their count */
 int
-disp_artifact_discoveries(winid tmpwin) /* supplied by dodiscover() */
+disp_artifact_discoveries(
+    winid tmpwin) /* supplied by dodiscover(); type is NHW_TEXT */
 {
     int i, m, otyp;
     const char *algnstr;
@@ -1050,7 +1061,7 @@ disp_artifact_discoveries(winid tmpwin) /* supplied by dodiscover() */
             continue; /* for WIN_ERR, we just count */
 
         if (i == 0)
-            putstr(tmpwin, iflags.menu_headings, "Artifacts");
+            putstr(tmpwin, iflags.menu_headings.attr, "Artifacts");
         m = artidisco[i];
         otyp = artilist[m].otyp;
         algnstr = align_str(artilist[m].alignment);
@@ -1071,7 +1082,8 @@ dump_artifact_info(winid tmpwin)
     int m;
     char buf[BUFSZ], buf2[BUFSZ];
 
-    putstr(tmpwin, iflags.menu_headings, "Artifacts");
+    /* not a menu, but header uses same bold or whatever attribute as such */
+    putstr(tmpwin, iflags.menu_headings.attr, "Artifacts");
     for (m = 1; m <= NROFARTIFACTS; ++m) {
         Snprintf(buf2, sizeof buf2,
                 "[%s%s%s%s%s%s%s%s%s]", /* 9 bits overall */
@@ -1136,7 +1148,7 @@ static const char *const mb_verb[2][NUM_MB_INDICES] = {
 };
 
 /* called when someone is being hit by Magicbane */
-static boolean
+staticfn boolean
 Mb_hit(struct monst *magr, /* attacker */
        struct monst *mdef, /* defender */
        struct obj *mb,     /* Magicbane */
@@ -1145,7 +1157,7 @@ Mb_hit(struct monst *magr, /* attacker */
        boolean vis,        /* whether the action can be seen */
        char *hittee)       /* target's name: "you" or mon_nam(mdef) */
 {
-    struct permonst *old_uasmon;
+    struct permonst *old_mdat;
     const char *verb;
     boolean youattack = (magr == &gy.youmonst),
             youdefend = (mdef == &gy.youmonst),
@@ -1204,7 +1216,7 @@ Mb_hit(struct monst *magr, /* attacker */
     /* now perform special effects */
     switch (attack_indx) {
     case MB_INDEX_CANCEL:
-        old_uasmon = gy.youmonst.data;
+        old_mdat = youdefend ? gy.youmonst.data : mdef->data;
         /* No mdef->mcan check: even a cancelled monster can be polymorphed
          * into a golem, and the "cancel" effect acts as if some magical
          * energy remains in spellcasting defenders to be absorbed later.
@@ -1214,16 +1226,20 @@ Mb_hit(struct monst *magr, /* attacker */
         } else {
             do_stun = FALSE;
             if (youdefend) {
-                if (gy.youmonst.data != old_uasmon)
+                if (gy.youmonst.data != old_mdat)
                     *dmgptr = 0; /* rehumanized, so no more damage */
                 if (u.uenmax > 0) {
                     u.uenmax--;
                     if (u.uen > 0)
                         u.uen--;
-                    gc.context.botl = TRUE;
+                    disp.botl = TRUE;
                     You("lose magical energy!");
                 }
             } else {
+                /* canceled shapeshifter/vamp may have changed forms, so
+                   update its name if necessary */
+                if (mdef->data != old_mdat)
+                    Strcpy(hittee, mon_nam(mdef));
                 if (mdef->data == &mons[PM_CLAY_GOLEM])
                     mdef->mhp = 1; /* cancelled clay golems will die */
                 if (youattack && attacktype(mdef->data, AT_MAGC)) {
@@ -1231,7 +1247,7 @@ Mb_hit(struct monst *magr, /* attacker */
                     if (u.uenmax > u.uenpeak)
                         u.uenpeak = u.uenmax;
                     u.uen++;
-                    gc.context.botl = TRUE;
+                    disp.botl = TRUE;
                     You("absorb magical energy!");
                 }
             }
@@ -1302,7 +1318,7 @@ Mb_hit(struct monst *magr, /* attacker */
             shieldeff(youdefend ? u.ux : mdef->mx,
                       youdefend ? u.uy : mdef->my);
         }
-        if ((do_stun || do_confuse) && Verbose(0,Mb_hit)) {
+        if ((do_stun || do_confuse) && flags.verbose) {
             char buf[BUFSZ];
 
             buf[0] = '\0';
@@ -1375,14 +1391,12 @@ artifact_hit(
                                 ? "vaporizes part of"
                                 : "burns",
                       hittee, !gs.spec_dbon_applies ? '.' : '!');
-        if (!rn2(4))
-            (void) destroy_mitem(mdef, POTION_CLASS, AD_FIRE);
-        if (!rn2(4))
-            (void) destroy_mitem(mdef, SCROLL_CLASS, AD_FIRE);
-        if (!rn2(7))
-            (void) destroy_mitem(mdef, SPBOOK_CLASS, AD_FIRE);
-        if (!rn2(4))
+        if (!rn2(4)) {
+            int itemdmg = destroy_items(mdef, AD_FIRE, *dmgptr);
+            if (!youdefend)
+                *dmgptr += itemdmg; /* item destruction dmg */
             ignite_items(mdef->minvent);
+        }
         if (youdefend && Slimed)
             burn_away_slime();
         return realizes_damage;
@@ -1392,8 +1406,11 @@ artifact_hit(
             pline_The("ice-cold blade %s %s%c",
                       !gs.spec_dbon_applies ? "hits" : "freezes", hittee,
                       !gs.spec_dbon_applies ? '.' : '!');
-        if (!rn2(4))
-            (void) destroy_mitem(mdef, POTION_CLASS, AD_COLD);
+        if (!rn2(4)) {
+            int itemdmg = destroy_items(mdef, AD_COLD, *dmgptr);
+            if (!youdefend)
+                *dmgptr += itemdmg; /* item destruction dmg */
+        }
         return realizes_damage;
     }
     if (attacks(AD_ELEC, otmp)) {
@@ -1403,10 +1420,11 @@ artifact_hit(
                       hittee, !gs.spec_dbon_applies ? '.' : '!');
         if (gs.spec_dbon_applies)
             wake_nearto(mdef->mx, mdef->my, 4 * 4);
-        if (!rn2(5))
-            (void) destroy_mitem(mdef, RING_CLASS, AD_ELEC);
-        if (!rn2(5))
-            (void) destroy_mitem(mdef, WAND_CLASS, AD_ELEC);
+        if (!rn2(5)) {
+            int itemdmg = destroy_items(mdef, AD_ELEC, *dmgptr);
+            if (!youdefend)
+                *dmgptr += itemdmg; /* item destruction dmg */
+        }
         return realizes_damage;
     }
     if (attacks(AD_MAGM, otmp)) {
@@ -1500,7 +1518,7 @@ artifact_hit(
                     return TRUE;
                 }
                 *dmgptr = 2 * mdef->mhp + FATAL_DAMAGE_MODIFIER;
-                pline(behead_msg[rn2(SIZE(behead_msg))], wepdesc,
+                pline(ROLL_FROM(behead_msg), wepdesc,
                       mon_nam(mdef));
                 if (Hallucination && !flags.female)
                     pline("Good job Henry, but that wasn't Anne.");
@@ -1520,7 +1538,7 @@ artifact_hit(
                     return TRUE;
                 }
                 *dmgptr = 2 * (Upolyd ? u.mh : u.uhp) + FATAL_DAMAGE_MODIFIER;
-                pline(behead_msg[rn2(SIZE(behead_msg))], wepdesc, "you");
+                pline(ROLL_FROM(behead_msg), wepdesc, "you");
                 otmp->dknown = TRUE;
                 /* Should amulets fall off? */
                 return TRUE;
@@ -1570,6 +1588,7 @@ artifact_hit(
                 if (youattack) {
                     healup(drain, 0, FALSE, FALSE);
                 } else {
+                    assert(magr != 0);
                     magr->mhp += drain;
                     if (magr->mhp > magr->mhpmax)
                         magr->mhp = magr->mhpmax;
@@ -1611,7 +1630,7 @@ artifact_hit(
 RESTORE_WARNING_FORMAT_NONLITERAL
 
 /* getobj callback for object to be invoked */
-static int
+staticfn int
 invoke_ok(struct obj *obj)
 {
     if (!obj)
@@ -1646,15 +1665,15 @@ doinvoke(void)
     return arti_invoke(obj);
 }
 
-static int
+staticfn int
 arti_invoke(struct obj *obj)
 {
-    register const struct artifact *oart = get_artifact(obj);
+    const struct artifact *oart = get_artifact(obj);
     if (!obj) {
         impossible("arti_invoke without obj");
         return ECMD_OK;
     }
-    if (!oart || !oart->inv_prop) {
+    if (oart == &artilist[ART_NONARTIFACT] || !oart->inv_prop) {
         if (obj->otyp == CRYSTAL_BALL)
             use_crystal_ball(&obj);
         else
@@ -1692,6 +1711,14 @@ arti_invoke(struct obj *obj)
                 healamt = (u.mhmax + 1 - u.mh) / 2;
             if (healamt || Sick || Slimed || Blinded > creamed)
                 You_feel("better.");
+            if (healamt || Sick || Slimed || BlindedTimeout > creamed)
+                You_feel("%sbetter.",
+                         (!healamt && !Sick && !Slimed
+                          /* when healing temporary blindness (aside from
+                             goop covering face), might still be blind
+                             due to PermaBlind or eyeless polymorph;
+                             vary the message in that situation */
+                          && (HBlinded & ~TIMEOUT) != 0L) ? "slightly " : "");
             else
                 goto nothing_special;
             if (healamt > 0) {
@@ -1704,9 +1731,9 @@ arti_invoke(struct obj *obj)
                 make_sick(0L, (char *) 0, FALSE, SICK_ALL);
             if (Slimed)
                 make_slimed(0L, (char *) 0);
-            if (Blinded > creamed)
+            if (BlindedTimeout > creamed)
                 make_blinded(creamed, FALSE);
-            gc.context.botl = TRUE;
+            disp.botl = TRUE;
             break;
         }
         case ENERGY_BOOST: {
@@ -1718,7 +1745,7 @@ arti_invoke(struct obj *obj)
                 epboost = u.uenmax - u.uen;
             if (epboost) {
                 u.uen += epboost;
-                gc.context.botl = TRUE;
+                disp.botl = TRUE;
                 You_feel("re-energized.");
             } else
                 goto nothing_special;
@@ -1754,13 +1781,15 @@ arti_invoke(struct obj *obj)
             d_level newlev;
             winid tmpwin = create_nhwindow(NHW_MENU);
             anything any;
-            int clr = 0;
+            int clr = NO_COLOR;
 
             any = cg.zeroany; /* set all bits to zero */
             start_menu(tmpwin, MENU_BEHAVE_STANDARD);
             /* use index+1 (cant use 0) as identifier */
             for (i = num_ok_dungeons = 0; i < gn.n_dgns; i++) {
                 if (!gd.dungeons[i].dunlev_ureached)
+                    continue;
+                if (i == tutorial_dnum) /* can't portal into tutorial */
                     continue;
                 any.a_int = i + 1;
                 add_menu(tmpwin, &nul_glyphinfo, &any, 0, 0,
@@ -1954,7 +1983,7 @@ finesse_ahriman(struct obj *obj)
 
     /* if we aren't levitating or this isn't an artifact which confers
        levitation via #invoke then freeinv() won't toggle levitation */
-    if (!Levitation || (oart = get_artifact(obj)) == 0
+    if (!Levitation || (oart = get_artifact(obj)) == &artilist[ART_NONARTIFACT]
         || oart->inv_prop != LEVITATION || !(ELevitation & W_ARTI))
         return FALSE;
 
@@ -1982,20 +2011,21 @@ artifact_light(struct obj *obj)
         && (obj->owornmask & W_ARM) != 0L)
         return TRUE;
 
-    return (boolean) (get_artifact(obj) && is_art(obj, ART_SUNSWORD));
+    return (boolean) ((get_artifact(obj) != &artilist[ART_NONARTIFACT])
+                      && is_art(obj, ART_SUNSWORD));
 }
 
 /* KMH -- Talking artifacts are finally implemented */
-void
+int
 arti_speak(struct obj *obj)
 {
-    register const struct artifact *oart = get_artifact(obj);
+    const struct artifact *oart = get_artifact(obj);
     const char *line;
     char buf[BUFSZ];
 
     /* Is this a speaking artifact? */
-    if (!oart || !(oart->spfx & SPFX_SPEAK))
-        return;
+    if (oart == &artilist[ART_NONARTIFACT] || !(oart->spfx & SPFX_SPEAK))
+        return ECMD_OK; /* nothing happened */
 
     line = getrumor(bcsign(obj), buf, TRUE);
     if (!*line)
@@ -2003,7 +2033,7 @@ arti_speak(struct obj *obj)
     pline("%s:", Tobjnam(obj, "whisper"));
     SetVoice((struct monst *) 0, 0, 80, voice_talking_artifact);
     verbalize1(line);
-    return;
+    return ECMD_TIME;
 }
 
 boolean
@@ -2011,7 +2041,8 @@ artifact_has_invprop(struct obj *otmp, uchar inv_prop)
 {
     const struct artifact *arti = get_artifact(otmp);
 
-    return (boolean) (arti && (arti->inv_prop == inv_prop));
+    return (boolean) ((arti != &artilist[ART_NONARTIFACT])
+                      && (arti->inv_prop == inv_prop));
 }
 
 /* Return the price sold to the hero of a given artifact or unique item */
@@ -2026,7 +2057,7 @@ arti_cost(struct obj *otmp)
         return (100L * (long) objects[otmp->otyp].oc_cost);
 }
 
-static uchar
+staticfn uchar
 abil_to_adtyp(long *abil)
 {
     struct abil2adtyp_tag {
@@ -2050,7 +2081,7 @@ abil_to_adtyp(long *abil)
     return 0;
 }
 
-static unsigned long
+staticfn unsigned long
 abil_to_spfx(long *abil)
 {
     static const struct abil2spfx_tag {
@@ -2105,7 +2136,7 @@ what_gives(long *abil)
             && (abil != &EWarn_of_mon || gc.context.warntype.obj)) {
             const struct artifact *art = get_artifact(obj);
 
-            if (art) {
+            if (art != &artilist[ART_NONARTIFACT]) {
                 if (dtyp) {
                     if (art->cary.adtyp == dtyp /* carried */
                         || (art->defn.adtyp == dtyp /* defends while worn */
@@ -2144,7 +2175,7 @@ static const char *const glow_verbs[] = {
 };
 
 /* relative strength that Sting is glowing (0..3), to select verb */
-static int
+staticfn int
 glow_strength(int count)
 {
     /* glow strength should also be proportional to proximity and
@@ -2294,24 +2325,29 @@ retouch_object(
     return 0;
 }
 
-/* an item which is worn/wielded or an artifact which conveys
-   something via being carried or which has an #invoke effect
-   currently in operation undergoes a touch test; if it fails,
-   it will be unworn/unwielded and revoked but not dropped */
-static boolean
-untouchable(struct obj *obj, boolean drop_untouchable)
+/* hero has changed form or alignment; an item which is worn/wielded
+   or an artifact which conveys something via being carried or which
+   has an #invoke effect currently in operation undergoes a touch test;
+   if it fails, it will be unworn/unwielded and maybe dropped */
+staticfn boolean
+untouchable(
+    struct obj *obj, /* object to test; in invent or is steed's saddle */
+    boolean drop_untouchable) /* whether to drop it if it can't be touched */
 {
     struct artifact *art;
     boolean beingworn, carryeffect, invoked;
     long wearmask = ~(W_QUIVER | (u.twoweap ? 0L : W_SWAPWEP) | W_BALL);
 
-    beingworn = ((obj->owornmask & wearmask) != 0L
-                 /* some items in use don't have any wornmask setting */
-                 || (obj->oclass == TOOL_CLASS
-                     && (obj->lamplit || (obj->otyp == LEASH && obj->leashmon)
-                         || (Is_container(obj) && Has_contents(obj)))));
+    beingworn = (obj /* never Null; this pacifies static analysis when
+                      * the get_artifact() macro tests 'obj' for Null */
+                 && ((obj->owornmask & wearmask) != 0L
+                     /* some items in use don't have any wornmask setting */
+                     || (obj->oclass == TOOL_CLASS
+                         && (obj->lamplit
+                             || (obj->otyp == LEASH && obj->leashmon)
+                             || (Is_container(obj) && Has_contents(obj))))));
 
-    if ((art = get_artifact(obj)) != 0) {
+    if ((art = get_artifact(obj)) != &artilist[ART_NONARTIFACT]) {
         carryeffect = (art->cary.adtyp || art->cspfx);
         invoked = (art->inv_prop > 0 && art->inv_prop <= LAST_PROP
                    && (u.uprops[art->inv_prop].extrinsic & W_ARTI) != 0L);
@@ -2336,7 +2372,8 @@ untouchable(struct obj *obj, boolean drop_untouchable)
 
 /* check all items currently in use (mostly worn) for touchability */
 void
-retouch_equipment(int dropflag) /* 0==don't drop, 1==drop all, 2==drop weapon */
+retouch_equipment(
+    int dropflag) /* 0==don't drop, 1==drop all, 2==drop weapon */
 {
     static int nesting = 0; /* recursion control */
     struct obj *obj;
@@ -2402,7 +2439,7 @@ retouch_equipment(int dropflag) /* 0==don't drop, 1==drop all, 2==drop weapon */
         clear_bypasses(); /* reset upon final exit */
 }
 
-static int
+staticfn int
 count_surround_traps(coordxy x, coordxy y)
 {
     struct rm *levp;
@@ -2501,4 +2538,33 @@ has_magic_key(struct monst *mon) /* if null, hero assumed */
     return (struct obj *) 0;
 }
 
+/* #define is_art(o,art) ((o) && (o)->oartifact == (art)) */
+
+boolean
+is_art(struct obj *obj, int art)
+{
+    if (obj && obj->oartifact == art)
+        return TRUE;
+    return FALSE;
+}
+
+/* #define get_artifact(o) \
+    (((o) && ((o)->artifact > 0 && (o)->artifact < AFTER_LAST_ARTIFACT)) \
+                             ? &artilist[(int) (o)->oartifact] \
+                             : &artilist[ART_NONARTIFACT]) */
+
+staticfn struct artifact *
+get_artifact(struct obj *obj)
+{
+    if (obj) {
+        int artidx = (int) obj->oartifact;
+
+        /* skip 0, 1st artifact at 1 */
+        /* SIZE(artilist) would include the terminator,
+           so use AFTER_LAST_ARTIFACT instead */
+        if (artidx > 0 && artidx < AFTER_LAST_ARTIFACT)
+            return &artilist[artidx];
+    }
+    return &artilist[ART_NONARTIFACT];
+}
 /*artifact.c*/

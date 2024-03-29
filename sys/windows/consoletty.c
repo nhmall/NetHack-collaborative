@@ -39,7 +39,7 @@
 #endif
 #endif
 
-extern boolean getreturn_enabled; /* from sys/share/pcsys.c */
+extern boolean getreturn_enabled; /* from windmain.c */
 extern int redirect_stdout;
 
 #ifdef TTY_GRAPHICS
@@ -170,8 +170,9 @@ struct console_t {
     WORD background;
     WORD foreground;
     WORD attr;
-    int current_nhcolor;
-    int current_nhbkcolor;
+    int32 current_nhcolor;
+    int32 current_nhbkcolor;
+    int32 current_colorflags;
     int current_nhattr[ATR_INVERSE+1];
     COORD cursor;
     HANDLE hConOut;
@@ -186,15 +187,8 @@ struct console_t {
     WCHAR cpMap[256];
     boolean font_changed;
     CONSOLE_FONT_INFOEX orig_font_info;
-#ifndef VIRTUAL_TERMINAL_SEQUENCES
-    UINT original_code_page;
-} console = {
-    0,
-    (FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_RED),
-    (FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_RED),
-    NO_COLOR,
-#else /* VIRTUAL_TERMINAL_SEQUENCES */
     UINT orig_code_page;
+#ifdef VIRTUAL_TERMINAL_SEQUENCES
     char *orig_localestr;
     DWORD orig_in_cmode;
     DWORD orig_out_cmode;
@@ -205,33 +199,18 @@ struct console_t {
     DWORD out_cmode;
     long color24;
     int color256idx;
+#endif /* VIRTUAL_TERMINAL_SEQUENCES */
 } console = {
-    FALSE,
-    0,
+    FALSE,    /* is_ready */
+    0,        /* hWnd */
     (FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_RED), /* background */
     (FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_RED), /* foreground */
     0,                                                     /* attr */
     0,                                                     /* current_nhcolor */
     0,                                                     /* current_nhbkcolor */
-#endif /* VIRTUAL_TERMINAL_SEQUENCES */
+    0,                                                     /* current_colorflags */
     {FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE},
-#ifndef VIRTUAL_TERMINAL_SEQUENCES
-    {0, 0},
-    NULL,
-    NULL,
-    { 0 },
-    0,
-    0,
-    FALSE,
-    0,
-    NULL,
-    NULL,
-    { 0 },
-    FALSE,
-    { 0 },
-    0
-#else /* VIRTUAL_TERMINAL_SEQUENCES */
-    { 0, 0 },                                              /* cursor */
+    {0, 0},   /* cursor */
     NULL,     /* hConOut*/
     NULL,     /* hConIn */
     { 0 },    /* cbsi */
@@ -245,6 +224,7 @@ struct console_t {
     FALSE,    /* font_changed */
     { 0 },    /* orig_font_info */
     0U,       /* orig_code_page */
+#ifdef VIRTUAL_TERMINAL_SEQUENCES
     NULL,     /* orig_localestr */
     0,        /* orig_in_cmode */
     0,        /* orig_out_cmode */
@@ -590,7 +570,7 @@ void
 emit_start_bold(void)
 {
     DWORD unused, reserved;
-    static const char escseq[] = "\x1b[4m";
+    static const char escseq[] = "\x1b[1m";
 
     WriteConsoleA(console.hConOut, (LPCSTR) escseq, (int) strlen(escseq),
                   &unused, &reserved);
@@ -715,8 +695,7 @@ emit_start_24bitcolor(long color24bit)
 {
     DWORD unused, reserved;
     static char tcolorbuf[QBUFSZ];
-    long mcolor =
-        (color24bit & 0xFFFFFF); /* color 0 has bit 0x1000000 set */
+    uint32 mcolor = COLORVAL(color24bit);
     Snprintf(tcolorbuf, sizeof tcolorbuf, tcfmtstr24bit,
              ((mcolor >> 16) & 0xFF),   /* red */
              ((mcolor >>  8) & 0xFF),   /* green */
@@ -975,23 +954,15 @@ void buffer_write(cell_t * buffer, cell_t * cell, COORD pos)
 void
 gettty(void)
 {
-#ifndef TEXTCOLOR
-    int k;
-#endif
     erase_char = '\b';
     kill_char = 21; /* cntl-U */
     iflags.cbreak = TRUE;
-#ifdef TEXTCOLOR
     init_ttycolor();
-#else
-    for (k = 0; k < CLR_MAX; ++k)
-        ttycolors[k] = NO_COLOR;
-#endif
 }
 
 /* reset terminal to original state */
 void
-settty(const char* s)
+settty(const char *s)
 {
     cmov(ttyDisplay->curx, ttyDisplay->cury);
     end_screen();
@@ -1026,8 +997,6 @@ tty_startup(int *wid, int *hgt)
     *wid = console.width;
     *hgt = console.height;
     set_option_mod_status("mouse_support", set_in_game);
-    iflags.colorcount = 16777216;
-//    iflags.colorcount = 256;
 }
 
 void
@@ -1054,7 +1023,7 @@ tty_start_screen(void)
 void
 tty_end_screen(void)
 {
-    clear_screen();
+    term_clear_screen();
     really_move_cursor();
     buffer_fill_to_end(console.back_buffer, &clear_cell, 0, 0);
     back_buffer_flip();
@@ -1067,7 +1036,7 @@ CtrlHandler(DWORD ctrltype)
     switch (ctrltype) {
     /* case CTRL_C_EVENT: */
     case CTRL_BREAK_EVENT:
-        clear_screen();
+        term_clear_screen();
     case CTRL_CLOSE_EVENT:
     case CTRL_LOGOFF_EVENT:
     case CTRL_SHUTDOWN_EVENT:
@@ -1257,7 +1226,7 @@ nocmov(int x, int y)
 }
 
 void
-xputs(const char* s)
+xputs(const char *s)
 {
     int k;
     int slen = (int) strlen(s);
@@ -1454,8 +1423,6 @@ g_putch(int in_ch)
     buffer_write(console.back_buffer, &cell, console.cursor);
 }
 
-#ifdef VIRTUAL_TERMINAL_SEQUENCES
-#ifdef UTF8_FROM_CORE
 /*
  * Overrides wintty.c function of the same name
  * for win32. It is used for glyphs only, not text and
@@ -1466,6 +1433,8 @@ g_putch(int in_ch)
 void
 g_pututf8(uint8 *sequence)
 {
+#ifdef VIRTUAL_TERMINAL_SEQUENCES
+#ifdef UTF8_FROM_CORE
     set_console_cursor(ttyDisplay->curx, ttyDisplay->cury);
     cell_t cell;
     cell.attr = console.attr;
@@ -1476,23 +1445,42 @@ g_pututf8(uint8 *sequence)
     Snprintf((char *) cell.utf8str, sizeof cell.utf8str, "%s",
              (char *) sequence);
     buffer_write(console.back_buffer, &cell, console.cursor);
-}
 #endif /* UTF8_FROM_CORE */
-
-void
-term_start_24bitcolor(struct unicode_representation *uval)
-{
-    console.color24 = uval->ucolor; /* color 0 has bit 0x1000000 set */
-    console.color256idx = uval->u256coloridx;
+#endif
 }
 
 void
-term_end_24bitcolor(void)
+term_start_extracolor(uint32 nhcolor, uint16 color256idx)
 {
+#ifdef VIRTUAL_TERMINAL_SEQUENCES
+    if ((nhcolor & NH_BASIC_COLOR) == 0) {
+        console.color24 = COLORVAL(nhcolor); /* color 0 has bit 0x1000000 set */
+        console.current_colorflags = 0;
+        console.color256idx = color256idx;
+    } else {
+#endif
+        /* NH_BASIC_COLOR */
+        console.current_nhcolor = COLORVAL(nhcolor);
+        console.current_colorflags = NH_BASIC_COLOR;
+        term_start_color(console.current_nhcolor);
+#ifdef VIRTUAL_TERMINAL_SEQUENCES
+    }
+#endif    
+}
+
+void term_start_256color(int idx)
+{
+}
+
+void
+term_end_extracolor(void)
+{
+#ifdef VIRTUAL_TERMINAL_SEQUENCES
     console.color24 = 0L;
     console.color256idx = 0;
+#endif
+    console.current_nhcolor = NO_COLOR;
 }
-#endif /* VIRTUAL_TERMINAL_SEQUENCES */
 
 void
 cl_end(void)
@@ -1557,7 +1545,7 @@ raw_clear_screen(void)
 }
 
 void
-clear_screen(void)
+term_clear_screen(void)
 {
     buffer_fill_to_end(console.back_buffer, &clear_cell, 0, 0);
     home();
@@ -1636,7 +1624,6 @@ tty_delay_output(void)
 static void
 init_ttycolor(void)
 {
-#ifdef TEXTCOLOR
     ttycolors[CLR_BLACK]        = FOREGROUND_INTENSITY; /* fix by Quietust */
     ttycolors[CLR_RED]          = FOREGROUND_RED;
     ttycolors[CLR_GREEN]        = FOREGROUND_GREEN;
@@ -1673,15 +1660,6 @@ init_ttycolor(void)
     ttycolors_inv[CLR_BRIGHT_CYAN] = BACKGROUND_GREEN | BACKGROUND_BLUE | BACKGROUND_INTENSITY;
     ttycolors_inv[CLR_WHITE]       = BACKGROUND_GREEN | BACKGROUND_BLUE | BACKGROUND_RED
                                        | BACKGROUND_INTENSITY;
-#else
-    int k;
-    ttycolors[0] = FOREGROUND_INTENSITY;
-    ttycolors_inv[0] = BACKGROUND_INTENSITY;
-    for (k = 1; k < SIZE(ttycolors); ++k) {
-        ttycolors[k] = FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_RED;
-        ttycolors_inv[k] = BACKGROUND_GREEN | BACKGROUND_BLUE | BACKGROUND_RED;
-    }
-#endif
     init_ttycolor_completed = TRUE;
 }
 
@@ -1765,31 +1743,29 @@ term_start_raw_bold(void)
 void
 term_start_color(int color)
 {
-#ifdef TEXTCOLOR
-    if (color >= 0 && color < CLR_MAX) {
+    if (color == NO_COLOR) {
+        term_end_color();
+    } else if (color >= 0 && color < CLR_MAX) {
         console.current_nhcolor = color;
-    } else
-#endif
-    console.current_nhcolor = NO_COLOR;
+    } else {
+       console.current_nhcolor = NO_COLOR;
+    }
 }
 
 void
 term_start_bgcolor(int color)
 {
-#ifdef TEXTCOLOR
-    if (color >= 0 && color < CLR_MAX) {
+    if (color != NO_COLOR && (color >= 0 && color < CLR_MAX)) {
         console.current_nhbkcolor = color;
-    } else
-#endif
-    console.current_nhbkcolor = NO_COLOR;
+    } else {
+        console.current_nhbkcolor = NO_COLOR;
+    }
 }
 
 void
 term_end_color(void)
 {
-#ifdef TEXTCOLOR
     console.foreground = DEFTEXTCOLOR;
-#endif
 #ifndef VIRTUAL_TERMINAL_SEQUENCES
     console.attr = (console.foreground | console.background);
 #endif /* ! VIRTUAL_TERMINAL_SEQUENCES */
@@ -1875,7 +1851,7 @@ toggle_mouse_support(void)
 
 /* handle tty options updates here */
 void
-consoletty_preference_update(const char* pref)
+consoletty_preference_update(const char *pref)
 {
     if (stricmp(pref, "mouse_support") == 0) {
 #ifndef NO_MOUSE_ALLOWED
@@ -1911,12 +1887,18 @@ tty_utf8graphics_fixup(void)
 {
     CONSOLE_FONT_INFOEX console_font_info;
     if ((tty_procs.wincap2 & WC2_U_UTF8STR) && SYMHANDLING(H_UTF8)) {
+        char *localestr = 0;
+
         if (!console.hConOut)
             console.hConOut = GetStdHandle(STD_OUTPUT_HANDLE);
         /* the locale */
-        if (console.localestr)
+        if (console.localestr) {
             free(console.localestr);
-        console.localestr = dupstr(setlocale(LC_ALL, ".UTF8"));
+            console.localestr = NULL;
+        }
+        localestr = setlocale(LC_ALL, ".UTF8");
+        if (localestr)
+            console.localestr = dupstr(localestr);
         /* the code page */
         SetConsoleOutputCP(65001);
         console.code_page = GetConsoleOutputCP();
@@ -2021,7 +2003,7 @@ win32con_toggle_cursor_info(void)
 #endif
 
 void
-map_subkeyvalue(char* op)
+map_subkeyvalue(char *op)
 {
     char digits[] = "0123456789";
     int length, i, idx, val;
@@ -2224,7 +2206,7 @@ set_known_good_console_font(void)
     console.font_changed = TRUE;
 #ifndef VIRTUAL_TERMINAL_SEQUENCES
     console.orig_font_info = console_font_info;
-    console.original_code_page = GetConsoleOutputCP();
+    console.orig_code_page = GetConsoleOutputCP();
 
 #else /* VIRTUAL_TERMINAL_SEQUENCES */
     console.code_page = GetConsoleOutputCP();
@@ -2259,7 +2241,7 @@ restore_original_console_font(void)
         BOOL success;
 #ifndef VIRTUAL_TERMINAL_SEQUENCES
         raw_print("Restoring original font and code page\n");
-        success = SetConsoleOutputCP(console.original_code_page);
+        success = SetConsoleOutputCP(console.orig_code_page);
 #else /* VIRTUAL_TERMINAL_SEQUENCES */
         if (wizard)
             raw_print("Restoring original font, code page and locale\n");
@@ -2329,7 +2311,7 @@ void set_cp_map(void)
 }
 
 #if 0
-/* early_raw_print() is used during early game intialization prior to the
+/* early_raw_print() is used during early game initialization prior to the
  * setting up of the windowing system.  This allows early errors and panics
  * to have there messages displayed.
  *
@@ -2506,7 +2488,10 @@ void nethack_enter_consoletty(void)
     console.orig_code_page = GetConsoleOutputCP();
 
     /* store the original locale */
-    console.orig_localestr = dupstr(setlocale(LC_ALL, ""));
+    console.orig_localestr = NULL;
+    localestr = setlocale(LC_ALL, "");
+    if (localestr)
+        console.orig_localestr = dupstr(localestr);
 
     /* store the original font */
     console.orig_font_info.cbSize = sizeof(console.orig_font_info);
@@ -2891,8 +2876,8 @@ set_keyhandling_via_option(void)
 int
 default_processkeystroke(
     HANDLE hConIn,
-    INPUT_RECORD* ir,
-    boolean* valid,
+    INPUT_RECORD *ir,
+    boolean *valid,
     boolean numberpad,
     int portdebug)
 {
@@ -3059,7 +3044,7 @@ int
 default_checkinput(
     HANDLE hConIn,
     INPUT_RECORD *ir,
-    DWORD* count,
+    DWORD *count,
     boolean numpad,
     int mode,
     int *mod,

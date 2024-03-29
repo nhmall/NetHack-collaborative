@@ -1,4 +1,4 @@
-/* NetHack 3.7	save.c	$NHDT-Date: 1661240721 2022/08/23 07:45:21 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.195 $ */
+/* NetHack 3.7	save.c	$NHDT-Date: 1706079844 2024/01/24 07:04:04 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.214 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Michael Allison, 2009. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -16,28 +16,28 @@
 int dotcnt, dotrow; /* also used in restore */
 #endif
 
-static void savelevchn(NHFILE *);
-static void savelevl(NHFILE *,boolean);
-static void savedamage(NHFILE *);
-static void save_bubbles(NHFILE *, xint8);
-static void save_stairs(NHFILE *);
-static void save_bc(NHFILE *);
-static void saveobj(NHFILE *,struct obj *);
-static void saveobjchn(NHFILE *,struct obj **);
-static void savemon(NHFILE *,struct monst *);
-static void savemonchn(NHFILE *,struct monst *);
-static void savetrapchn(NHFILE *,struct trap *);
-static void save_gamelog(NHFILE *);
-static void savegamestate(NHFILE *);
-static void savelev_core(NHFILE *, xint8);
-static void save_msghistory(NHFILE *);
+staticfn void savelevchn(NHFILE *);
+staticfn void savelevl(NHFILE *,boolean);
+staticfn void savedamage(NHFILE *);
+staticfn void save_bubbles(NHFILE *, xint8);
+staticfn void save_stairs(NHFILE *);
+staticfn void save_bc(NHFILE *);
+staticfn void saveobj(NHFILE *, struct obj *);
+staticfn void saveobjchn(NHFILE *, struct obj **) NO_NNARGS;
+staticfn void savemon(NHFILE *, struct monst *);
+staticfn void savemonchn(NHFILE *, struct monst *) NO_NNARGS;
+staticfn void savetrapchn(NHFILE *, struct trap *) NO_NNARGS;
+staticfn void save_gamelog(NHFILE *);
+staticfn void savegamestate(NHFILE *);
+staticfn void savelev_core(NHFILE *, xint8);
+staticfn void save_msghistory(NHFILE *);
 
 #ifdef ZEROCOMP
-static void zerocomp_bufon(int);
-static void zerocomp_bufoff(int);
-static void zerocomp_bflush(int);
-static void zerocomp_bwrite(int, genericptr_t, unsigned int);
-static void zerocomp_bputc(int);
+staticfn void zerocomp_bufon(int);
+staticfn void zerocomp_bufoff(int);
+staticfn void zerocomp_bflush(int);
+staticfn void zerocomp_bwrite(int, genericptr_t, unsigned int);
+staticfn void zerocomp_bputc(int);
 #endif
 
 #if defined(HANGUPHANDLING)
@@ -161,8 +161,6 @@ dosave0(void)
     if (nhfp && nhfp->fplog)
         (void) fprintf(nhfp->fplog, "# post-validation\n");
     store_plname_in_file(nhfp);
-    gu.ustuck_id = (u.ustuck ? u.ustuck->m_id : 0);
-    gu.usteed_id = (u.usteed ? u.usteed->m_id : 0);
     /* savelev() might save uball and uchain, releasing their memory if
        FREEING, so we need to check their status now; if hero is swallowed,
        uball and uchain will persist beyond saving map floor and inventory
@@ -240,7 +238,7 @@ dosave0(void)
     return res;
 }
 
-static void
+staticfn void
 save_gamelog(NHFILE *nhfp)
 {
     struct gamelog_line *tmp = gg.gamelog, *tmp2;
@@ -273,7 +271,7 @@ save_gamelog(NHFILE *nhfp)
         gg.gamelog = NULL;
 }
 
-static void
+staticfn void
 savegamestate(NHFILE *nhfp)
 {
     unsigned long uid;
@@ -328,16 +326,6 @@ savegamestate(NHFILE *nhfp)
     }
     save_artifacts(nhfp);
     save_oracles(nhfp);
-    if (gu.ustuck_id) {
-        if (nhfp->structlevel)
-            bwrite(nhfp->fd, (genericptr_t) &gu.ustuck_id,
-                   sizeof gu.ustuck_id);
-    }
-    if (gu.usteed_id) {
-        if (nhfp->structlevel)
-            bwrite(nhfp->fd, (genericptr_t) &gu.usteed_id,
-                   sizeof gu.usteed_id);
-    }
     if (nhfp->structlevel) {
         bwrite(nhfp->fd, (genericptr_t) gp.pl_character,
                sizeof gp.pl_character);
@@ -356,7 +344,7 @@ savegamestate(NHFILE *nhfp)
 
 /* potentially called from goto_level(do.c) as well as savestateinlock() */
 boolean
-tricked_fileremoved(NHFILE* nhfp, char* whynot)
+tricked_fileremoved(NHFILE *nhfp, char *whynot)
 {
     if (!nhfp) {
         pline1(whynot);
@@ -437,8 +425,6 @@ savestateinlock(void)
             store_savefileinfo(nhfp);
             store_plname_in_file(nhfp);
 
-            gu.ustuck_id = (u.ustuck ? u.ustuck->m_id : 0);
-            gu.usteed_id = (u.usteed ? u.usteed->m_id : 0);
             /* if ball and/or chain aren't on floor or in invent, keep a copy
                of their pointers; not valid when on floor or in invent */
             gl.looseball = BALL_IN_MON ? uball : 0;
@@ -476,7 +462,7 @@ savelev(NHFILE *nhfp, xint8 lev)
         gu.uz_save.dnum = gu.uz_save.dlevel = 0; /* unset */
 }
 
-static void
+staticfn void
 savelev_core(NHFILE *nhfp, xint8 lev)
 {
 #ifdef TOS
@@ -547,7 +533,11 @@ savelev_core(NHFILE *nhfp, xint8 lev)
         bwrite(nhfp->fd, (genericptr_t) &gd.dndest, sizeof (dest_area));
         bwrite(nhfp->fd, (genericptr_t) &gl.level.flags, sizeof gl.level.flags);
         bwrite(nhfp->fd, (genericptr_t) &gd.doors_alloc, sizeof gd.doors_alloc);
-        bwrite(nhfp->fd, (genericptr_t) gd.doors, gd.doors_alloc * sizeof (coord));
+        /* don't rely on underlying write() behavior to write
+         *  nothing if count arg is 0, just skip it */
+        if (gd.doors_alloc)
+            bwrite(nhfp->fd, (genericptr_t) gd.doors,
+                   gd.doors_alloc * sizeof (coord));
     }
     save_rooms(nhfp); /* no dynamic memory to reclaim */
 
@@ -567,6 +557,8 @@ savelev_core(NHFILE *nhfp, xint8 lev)
     savedamage(nhfp); /* pending shop wall and/or floor repair */
     save_regions(nhfp);
     save_bubbles(nhfp, lev); /* for water and air */
+    save_exclusions(nhfp);
+    save_track(nhfp);
 
     if (nhfp->mode != FREEING) {
         if (nhfp->structlevel)
@@ -582,8 +574,8 @@ savelev_core(NHFILE *nhfp, xint8 lev)
     return;
 }
 
-static void
-savelevl(NHFILE* nhfp, boolean rlecomp)
+staticfn void
+savelevl(NHFILE *nhfp, boolean rlecomp)
 {
 #ifdef RLECOMP
     struct rm *prm, *rgrm;
@@ -643,7 +635,7 @@ savelevl(NHFILE* nhfp, boolean rlecomp)
 }
 
 /* save Plane of Water's air bubbles and Plane of Air's clouds */
-static void
+staticfn void
 save_bubbles(NHFILE *nhfp, xint8 lev)
 {
     xint8 bbubbly;
@@ -666,7 +658,7 @@ save_bubbles(NHFILE *nhfp, xint8 lev)
 
 /* used when saving a level and also when saving dungeon overview data */
 void
-savecemetery(NHFILE* nhfp, struct cemetery** cemeteryaddr)
+savecemetery(NHFILE *nhfp, struct cemetery **cemeteryaddr)
 {
     struct cemetery *thisbones, *nextbones;
     int flag;
@@ -690,10 +682,10 @@ savecemetery(NHFILE* nhfp, struct cemetery** cemeteryaddr)
         *cemeteryaddr = 0;
 }
 
-static void
-savedamage(NHFILE* nhfp)
+staticfn void
+savedamage(NHFILE *nhfp)
 {
-    register struct damage *damageptr, *tmp_dam;
+    struct damage *damageptr, *tmp_dam;
     unsigned int xl = 0;
 
     damageptr = gl.level.damagelist;
@@ -717,8 +709,8 @@ savedamage(NHFILE* nhfp)
         gl.level.damagelist = 0;
 }
 
-static void
-save_stairs(NHFILE* nhfp)
+staticfn void
+save_stairs(NHFILE *nhfp)
 {
     stairway *stway = gs.stairs;
     int buflen = (int) sizeof *stway;
@@ -752,7 +744,7 @@ save_stairs(NHFILE* nhfp)
 
 /* if ball and/or chain are loose, make an object chain for it/them and
    save that separately from other objects */
-static void
+staticfn void
 save_bc(NHFILE *nhfp)
 {
     struct obj *bc_objs = 0;
@@ -782,7 +774,7 @@ save_bc(NHFILE *nhfp)
 
 /* save one object;
    caveat: this is only for perform_bwrite(); caller handles release_data() */
-static void
+staticfn void
 saveobj(NHFILE *nhfp, struct obj *otmp)
 {
     int buflen, zerobuf = 0;
@@ -826,10 +818,10 @@ saveobj(NHFILE *nhfp, struct obj *otmp)
 
 /* save an object chain; sets head of list to Null when done;
    handles release_data() for each object in the list */
-static void
-saveobjchn(NHFILE* nhfp, struct obj** obj_p)
+staticfn void
+saveobjchn(NHFILE *nhfp, struct obj **obj_p)
 {
-    register struct obj *otmp = *obj_p;
+    struct obj *otmp = *obj_p;
     struct obj *otmp2;
     boolean is_invent = (otmp && otmp == gi.invent);
     int minusone = -1;
@@ -889,8 +881,8 @@ saveobjchn(NHFILE* nhfp, struct obj** obj_p)
     }
 }
 
-static void
-savemon(NHFILE* nhfp, struct monst* mtmp)
+staticfn void
+savemon(NHFILE *nhfp, struct monst *mtmp)
 {
     int buflen;
 
@@ -952,10 +944,10 @@ savemon(NHFILE* nhfp, struct monst* mtmp)
     }
 }
 
-static void
-savemonchn(NHFILE* nhfp, register struct monst* mtmp)
+staticfn void
+savemonchn(NHFILE *nhfp, struct monst *mtmp)
 {
-    register struct monst *mtmp2;
+    struct monst *mtmp2;
     int minusone = -1;
 
     while (mtmp) {
@@ -973,6 +965,10 @@ savemonchn(NHFILE* nhfp, register struct monst* mtmp)
                 gc.context.polearm.m_id = mtmp->m_id;
                 gc.context.polearm.hitmon = NULL;
             }
+            if (mtmp == u.ustuck)
+                u.ustuck_mid = u.ustuck->m_id;
+            if (mtmp == u.usteed)
+                u.usteed_mid = u.usteed->m_id;
             mtmp->nmon = NULL;  /* nmon saved into mtmp2 */
             dealloc_monst(mtmp);
         }
@@ -985,11 +981,11 @@ savemonchn(NHFILE* nhfp, register struct monst* mtmp)
 }
 
 /* save traps; gf.ftrap is the only trap chain so the 2nd arg is superfluous */
-static void
-savetrapchn(NHFILE* nhfp, register struct trap* trap)
+staticfn void
+savetrapchn(NHFILE *nhfp, struct trap *trap)
 {
     static struct trap zerotrap;
-    register struct trap *trap2;
+    struct trap *trap2;
 
     while (trap) {
         boolean use_relative = (gp.program_state.restoring != REST_GSTATE
@@ -1019,10 +1015,10 @@ savetrapchn(NHFILE* nhfp, register struct trap* trap)
  * level routine marks nonexistent fruits by making the fid negative.
  */
 void
-savefruitchn(NHFILE* nhfp)
+savefruitchn(NHFILE *nhfp)
 {
     static struct fruit zerofruit;
-    register struct fruit *f2, *f1;
+    struct fruit *f2, *f1;
 
     f1 = gf.ffruit;
     while (f1) {
@@ -1043,10 +1039,8 @@ savefruitchn(NHFILE* nhfp)
         gf.ffruit = 0;
 }
 
-
-
-static void
-savelevchn(NHFILE* nhfp)
+staticfn void
+savelevchn(NHFILE *nhfp)
 {
     s_level *tmplev, *tmplev2;
     int cnt = 0;
@@ -1071,7 +1065,7 @@ savelevchn(NHFILE* nhfp)
 }
 
 void
-store_plname_in_file(NHFILE* nhfp)
+store_plname_in_file(NHFILE *nhfp)
 {
     int plsiztmp = PL_NSIZ;
 
@@ -1085,8 +1079,8 @@ store_plname_in_file(NHFILE* nhfp)
     return;
 }
 
-static void
-save_msghistory(NHFILE* nhfp)
+staticfn void
+save_msghistory(NHFILE *nhfp)
 {
     char *msg;
     int msgcount = 0, msglen;
@@ -1118,7 +1112,7 @@ save_msghistory(NHFILE* nhfp)
 }
 
 void
-store_savefileinfo(NHFILE* nhfp)
+store_savefileinfo(NHFILE *nhfp)
 {
     /* sfcap (decl.c) describes the savefile feature capabilities
      * that are supported by this port/platform build.
@@ -1152,7 +1146,7 @@ free_dungeons(void)
     tnhfp.mode = FREEING;
     savelevchn(&tnhfp);
     save_dungeon(&tnhfp, FALSE, TRUE);
-    free_luathemes(TRUE);
+    free_luathemes(all_themes);
 #endif
     return;
 }
@@ -1174,6 +1168,7 @@ freedynamicdata(void)
     msgtype_free();
     savedsym_free();
     tmp_at(DISP_FREEMEM, 0); /* temporary display effects */
+    purge_all_custom_entries();
 #ifdef FREE_ALL_MEMORY
 #define free_current_level() savelev(&tnhfp, -1)
 #define freeobjchn(X) (saveobjchn(&tnhfp, &X), X = 0)
@@ -1190,6 +1185,7 @@ freedynamicdata(void)
 
     /* move-specific data */
     dmonsfree(); /* release dead monsters */
+    alloc_itermonarr(0U); /* a request of 0 releases existing allocation */
 
     /* level-specific data */
     done_object_cleanup(); /* maybe force some OBJ_FREE items onto map */
@@ -1215,6 +1211,7 @@ freedynamicdata(void)
     freeroleoptvals(); /* saveoptvals(&tnhfp) */
     cmdq_clear(CQ_CANNED);
     cmdq_clear(CQ_REPEAT);
+    free_tutorial(); /* (only needed if quiting while in tutorial) */
 
     /* some pointers in iflags */
     if (iflags.wc_font_map)
@@ -1238,7 +1235,7 @@ freedynamicdata(void)
 #ifdef USER_SOUNDS
     release_sound_mappings();
 #endif
-#ifdef DUMPLOG
+#ifdef DUMPLOG_CORE
     dumplogfreemessages();
 #endif
     discard_gamelog();

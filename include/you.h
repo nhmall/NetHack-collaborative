@@ -1,4 +1,4 @@
-/* NetHack 3.7	you.h	$NHDT-Date: 1596498576 2020/08/03 23:49:36 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.48 $ */
+/* NetHack 3.7	you.h	$NHDT-Date: 1702349061 2023/12/12 02:44:21 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.75 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2016. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -43,8 +43,8 @@ struct u_event {
     Bitfield(qcalled, 1);      /* called by Quest leader to do task */
     Bitfield(qexpelled, 1);    /* expelled from the Quest dungeon */
     Bitfield(qcompleted, 1);   /* successfully completed Quest task */
-    Bitfield(uheard_tune, 2);  /* 1=know about, 2=heard passtune */
-
+    Bitfield(uheard_tune, 2);  /* 1=know about, 2=heard passtune, 3=bridge has
+                                * been destroyed so tune has become useless */
     Bitfield(uopened_dbridge, 1);   /* opened the drawbridge */
     Bitfield(invoked, 1);           /* invoked Gate to the Sanctum level */
     Bitfield(gehennom_entered, 1);  /* entered Gehennom via Valley */
@@ -114,7 +114,7 @@ enum achivements {
      *  defeated nemesis (not same as acquiring Bell or artifact),
      *  completed quest (formally, by bringing artifact to leader),
      *  entered rogue level,
-     *  entered Fort Ludios level/branch (not guaranteed to be achieveable),
+     *  entered Fort Ludios level/branch (not guaranteed to be achievable),
      *  entered Medusa level,
      *  entered castle level,
      *  obtained castle wand (handle similarly to mines and sokoban prizes),
@@ -154,12 +154,14 @@ struct u_conduct {     /* number of times... */
     long wishes;       /* used a wish */
     long wisharti;     /* wished for an artifact */
     long sokocheat;    /* violated special 'rules' in Sokoban */
+    long pets;         /* obtained a pet */
     /* genocides already listed at end of game */
 };
 
 struct u_roleplay {
     boolean blind;  /* permanently blind */
     boolean nudist; /* has not worn any armor, ever */
+    boolean deaf;   /* permanently deaf */
     long numbones;  /* # of bones files loaded  */
 };
 
@@ -356,7 +358,6 @@ struct you {
     d_level utolev;     /* level monster teleported you to, or uz */
     uchar utotype;      /* bitmask of goto_level() flags for utolev */
     d_level ucamefrom;  /* level where you came from; used for tutorial */
-    boolean nofollowers; /* level change ignores monster followers/pets */
     boolean umoved;     /* changed map location (post-move) */
     int last_str_turn;  /* 0: none, 1: half turn, 2: full turn
                          * +: turn right, -: turn left */
@@ -420,6 +421,11 @@ struct you {
     Bitfield(uburied, 1);       /* you're buried */
     Bitfield(uedibility, 1);    /* blessed food detect; sense unsafe food */
     Bitfield(usaving_grace, 1); /* prevents death once */
+    Bitfield(uhandedness, 1); /* There is no advantage for either handedness.
+                                 The distinction is only for flavor variation
+                                 and for use in messages. */
+#define RIGHT_HANDED 0x00
+#define LEFT_HANDED  0x01
 
     unsigned udg_cnt;           /* how long you have been demigod */
     struct u_event uevent;      /* certain events have happened */
@@ -470,6 +476,8 @@ struct you {
     int uinvault;
     struct monst *ustuck;    /* engulfer or grabber, maybe grabbee if Upolyd */
     struct monst *usteed;    /* mount when riding */
+    unsigned ustuck_mid;     /* u.ustuck->m_id, used during save/restore */
+    unsigned usteed_mid;     /* u.usteed->m_id, used during save/restore */
     long ugallop;            /* turns steed will run after being kicked */
     int urideturns;          /* time spent riding, for skill advancement */
     int umortality;          /* how many times you died */
@@ -480,6 +488,7 @@ struct you {
     struct skills weapon_skills[P_NUM_SKILLS];
     boolean twoweap;         /* KMH -- Using two-weapon combat */
     short mcham;             /* vampire mndx if shapeshifted to bat/cloud */
+    short umovement;         /* instead of youmonst.movement */
     schar uachieved[N_ACH];  /* list of achievements in the order attained */
 }; /* end of `struct you' */
 
@@ -499,6 +508,7 @@ struct you {
 struct _hitmon_data {
     int dmg;  /* damage */
     int thrown;
+    int twohits; /* 0: 1 of 1; 1: 1 of 2; 2: 2 of 2 */
     int dieroll;
     struct permonst *mdat;
     boolean use_weapon_skill;
@@ -530,7 +540,14 @@ struct _hitmon_data {
 
 /* point px,py is adjacent to (or same location as) hero */
 #define next2u(px,py) (distu((px),(py)) <= 2)
+/* is monster on top of or next to hero? */
+#define m_next2u(m) (distu((m)->mx,(m)->my) <= 2)
 /* hero at (x,y)? */
 #define u_at(x,y) ((x) == u.ux && (y) == u.uy)
+
+#define URIGHTY (u.uhandedness == RIGHT_HANDED)
+#define ULEFTY (u.uhandedness == LEFT_HANDED)
+#define RING_ON_PRIMARY (ULEFTY ? uleft : uright)
+#define RING_ON_SECONDARY (ULEFTY ? uright : uleft)
 
 #endif /* YOU_H */

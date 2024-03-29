@@ -40,7 +40,6 @@
 #define SHELL  /* shell escape */
 /* #define TERMLIB		/* use termcap file */
 #define ANSI_DEFAULT /* allows NetHack to run without termcap file */
-#define TEXTCOLOR    /* allow color */
 
 /*
  * The remaining code shouldn't need modification.
@@ -65,14 +64,7 @@
 #endif
 
 #ifndef SYSTEM_H
-#include "system.h"
-#endif
-
-#ifndef index
-#define index strchr
-#endif
-#ifndef rindex
-#define rindex strrchr
+/* #include "system.h" */
 #endif
 
 #include <time.h>

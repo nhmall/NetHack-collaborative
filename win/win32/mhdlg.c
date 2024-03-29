@@ -38,7 +38,7 @@ mswin_getlin_window(const char *question, char *result, size_t result_size)
     INT_PTR ret;
     struct getlin_data data;
 
-    /* initilize dialog data */
+    /* initialize dialog data */
     ZeroMemory(&data, sizeof(data));
     data.question = question;
     data.result = result;
@@ -136,6 +136,7 @@ GetlinDlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_COMMAND: {
         TCHAR wbuf2[BUFSZ];
 
+        wbuf2[BUFSZ - 1] = '\0';
         switch (LOWORD(wParam)) {
         /* OK button was pressed */
         case IDOK:
@@ -401,7 +402,7 @@ calculate_player_selector_layout(plsel_data_t * data)
     name_box->size.cy = (int) (24 * scale);
 
     control_t * role_list = &data->controls[psc_role_list];
-    /* NOTE: we dont' scale the list view reported height as it appears these
+    /* NOTE: we don't scale the list view reported height as it appears these
              values are the actual size the control will be drawn at using the
              existing DPI value */
     role_list->size.cy = list_view_height(role_list->hWnd, data->role_count);
@@ -574,6 +575,7 @@ plselInitDialog(struct plsel_data * data)
 {
     TCHAR wbuf[BUFSZ];
     LVCOLUMN lvcol;
+    control_t *control;
 
     SetWindowLongPtr(data->dialog, GWLP_USERDATA, (LONG_PTR) data);
 
@@ -654,10 +656,12 @@ plselInitDialog(struct plsel_data * data)
     plselAdjustSelections(data->dialog);
 
     /* set tab order */
-    control_t * control = &data->controls[psc_quit_button];
-    for(int i = psc_quit_button; i >= psc_name_box; i--, control++)
-        SetWindowPos(control->hWnd, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 
+    for (int i = psc_quit_button; i >= psc_name_box; i--) {
+        control = &data->controls[i];
+        SetWindowPos(control->hWnd, NULL, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE);
+    }
     do_player_selector_layout(data);
 
     center_dialog(data->dialog);

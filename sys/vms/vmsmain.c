@@ -1,4 +1,4 @@
-/* NetHack 3.7	vmsmain.c	$NHDT-Date: 1596498307 2020/08/03 23:45:07 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.45 $ */
+/* NetHack 3.7	vmsmain.c	$NHDT-Date: 1693359633 2023/08/30 01:40:33 $  $NHDT-Branch: keni-crashweb2 $:$NHDT-Revision: 1.57 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2011. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -6,6 +6,12 @@
 
 #include "hack.h"
 #include "dlb.h"
+
+#ifdef VMSVSI
+#include <descrip.h>
+#include <lib$routines.h>
+#include <starlet.h>
+#endif
 
 #include <signal.h>
 
@@ -27,12 +33,14 @@ static vms_handler_type vms_handler(genericptr_t, genericptr_t);
 static void wd_message(void);
 static boolean wiz_error_flag = FALSE;
 
+static char *progname = (char *) 0;
+
 int
 main(int argc, char *argv[])
 {
     NHFILE *nhfp;
 #ifdef CHDIR
-    register char *dir;
+    char *dir;
 #endif
     boolean resuming = FALSE; /* assume new game */
 
@@ -42,11 +50,14 @@ main(int argc, char *argv[])
     privon();
 #endif
 
-    early_init();
+    early_init(argc, argv);
 
     atexit(byebye);
-    gh.hname = argv[0];
-    gh.hname = vms_basename(gh.hname); /* name used in 'usage' type messages */
+    /* vms_basename(,FALSE) strips device, directory, suffix, and version;
+       the result is returned in a static buffer so we make a copy that
+       isn't at risk of getting clobbered by core's handling of DEBUGFILES */
+    progname = dupstr(vms_basename(argv[0], FALSE));
+    gh.hname = progname;
     gh.hackpid = getpid();
     (void) umask(0);
 
@@ -183,7 +194,7 @@ main(int argc, char *argv[])
      */
     vision_init();
 
-    init_sound_and_display_gamewindows();
+    init_sound_disp_gamewindows();
 
 /*
  * First, try to find and restore a save file for specified character.
@@ -377,7 +388,7 @@ whoami(void)
      * Note that we trust the user here; it is possible to play under
      * somebody else's name.
      */
-    register char *s;
+    char *s;
 
     if (!*gp.plname && (s = nh_getenv("USER")))
         (void) lcase(strncpy(gp.plname, s, sizeof(gp.plname) - 1));
@@ -386,10 +397,12 @@ whoami(void)
 static void
 byebye(void)
 {
-    void (*hup)(int) ;
+    void (*hup)(int);
 #ifdef SHELL
     extern unsigned long dosh_pid, mail_pid;
+#ifndef VMSVSI
     extern unsigned long sys$delprc(unsigned long *, const genericptr_t);
+#endif
 
     /* clean up any subprocess we've spawned that may still be hanging around
      */
@@ -398,11 +411,19 @@ byebye(void)
     if (mail_pid)
         (void) sys$delprc(&mail_pid, (genericptr_t) 0), mail_pid = 0;
 #endif
+#ifdef FREE_ALL_MEMORY
+    if (progname && !gp.program_state.panicking) {
+        if (gh.hname == progname)
+            gh.hname = (char *) 0;
+        free((genericptr_t) progname), progname = (char *) 0;
+    }
+#endif
 
     /* SIGHUP doesn't seem to do anything on VMS, so we fudge it here... */
-    hup = (void (*)(int) ) signal(SIGHUP, SIG_IGN);
-    if (!gp.program_state.exiting++ && hup != (void (*)(int) ) SIG_DFL
-        && hup != (void (*)(int) ) SIG_IGN) {
+    hup = (void (*)(int)) signal(SIGHUP, SIG_IGN);
+    if (!gp.program_state.exiting++
+        && hup != (void (*)(int)) SIG_DFL
+        && hup != (void (*)(int)) SIG_IGN) {
         (*hup)(SIGHUP);
     }
 
@@ -461,6 +482,13 @@ authorize_wizard_mode(void)
         return TRUE;
     wiz_error_flag = TRUE; /* not being allowed into wizard mode */
     return FALSE;
+}
+
+/* similar to above, validate explore mode access */
+boolean
+authorize_explore_mode(void)
+{
+    return TRUE; /* no restrictions on explore mode */
 }
 
 static void
