@@ -13,15 +13,17 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: fetch-texlive
+      run: sudo apt install texlive
     - name: nhsetup
       run: sys/unix/setup.sh sys/unix/hints/linux.370
     - name: fetch-lua
       run: make fetch-lua
-    - name: make
-      run: make
-    - name: fetch-texlive
-      run: sudo apt install texlive
-    - name: Guidebook
-      run: make Guidebook ; make Guidebook.txt ; make Guidebook.pdf
+    - name: make NetHack
+      run: |
+            make
+            make Guidebook
+            make Guidebook.txt
+            make Guidebook.pdf
 
 
