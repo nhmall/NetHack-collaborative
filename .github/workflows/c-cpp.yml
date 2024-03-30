@@ -20,7 +20,7 @@ jobs:
     - name: make
       run: make
     - name: fetch-texlive
-      run: apt install texlive
+      run: sudo apt install texlive
     - name: Guidebook
       run: make Guidebook ; make Guidebook.txt ; make Guidebook.pdf
 
