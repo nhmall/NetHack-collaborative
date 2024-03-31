@@ -7,9 +7,13 @@ name: MSBuild
 
 on:
   push:
-    branches: [ "NetHack-3.7" ]
+    branches:
+       - "NetHack-3.7"
+       - test-actions
   pull_request:
-    branches: [ "NetHack-3.7" ]
+    branches:
+        - "NetHack-3.7"
+        - test-actions
 
 env:
   # Path to the solution file relative to the root of the project.
