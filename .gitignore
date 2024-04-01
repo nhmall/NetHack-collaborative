@@ -35,7 +35,7 @@ Makefile
 Debug/
 Release/
 binary/
-package/
+package/*
 vspackage/
 vsbinary/
 build/

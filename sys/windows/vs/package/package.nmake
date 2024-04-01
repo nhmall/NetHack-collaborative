@@ -111,11 +111,11 @@ showvar:
 	@echo PlatformShortName=[$(PlatformShortName)]
 	@echo Configuration=[$(Configuration)]
 
-vspackagedir: 
+vspackagedir:
 	@if not exist $(VSPACKAGEDIR)\*.* echo creating directory $(VSPACKAGEDIR:\=/)
 	@if not exist $(VSPACKAGEDIR)\*.* mkdir $(VSPACKAGEDIR)
 
-vsbindir: 
+vsbindir:
 	@if not exist $(VSBINDIR)\*.* echo creating directory $(VSBINDIR:\=/)
 	@if not exist $(VSBINDIR)\*.* mkdir $(VSBINDIR)
 
