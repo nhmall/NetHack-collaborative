@@ -25,5 +25,12 @@ jobs:
             make Guidebook
             make Guidebook.txt
             make Guidebook.pdf
+    - name: Archive Guidebook
+      uses: actions/upload-artifact@v4
+      with:
+          name: Guidebook.pdf
+          path: doc/Guidebook.pdf
+
+            
 
 
