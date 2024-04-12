@@ -268,6 +268,7 @@ extern boolean exp_percent_changing(void);
 extern int stat_cap_indx(void);
 extern int stat_hunger_indx(void);
 extern const char *bl_idx_to_fldname(int);
+extern void repad_with_dashes(char *);
 extern void condopt(int, boolean *, boolean);
 extern int parse_cond_option(boolean, char *);
 extern boolean cond_menu(void);
@@ -1550,6 +1551,7 @@ extern void movebubbles(void);
 extern void water_friction(void);
 extern void save_waterlevel(NHFILE *) NONNULLARG1;
 extern void restore_waterlevel(NHFILE *) NONNULLARG1;
+extern void maybe_adjust_hero_bubble(void);
 
 /* ### mkobj.c ### */
 
@@ -1839,6 +1841,7 @@ extern boolean m_can_break_boulder(struct monst *) NONNULLARG1;
 extern void m_break_boulder(struct monst *, coordxy, coordxy) NONNULLARG1;
 extern int dochug(struct monst *) NONNULLARG1;
 extern boolean m_digweapon_check(struct monst *, coordxy, coordxy) NONNULLARG1;
+extern boolean m_avoid_kicked_loc(struct monst *, coordxy, coordxy) NONNULLARG1;
 extern int m_move(struct monst *, int) NONNULLARG1;
 extern int m_move_aggress(struct monst *, coordxy, coordxy) NONNULLARG1;
 extern void dissolve_bars(coordxy, coordxy);
