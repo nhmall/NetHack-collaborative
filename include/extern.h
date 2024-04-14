@@ -325,6 +325,11 @@ extern boolean closest_color(uint32_t lcolor, uint32_t *closecolor, uint16 *clri
 extern int color_distance(uint32_t, uint32_t);
 extern boolean onlyhexdigits(const char *buf);
 extern uint32 get_nhcolor_from_256_index(int idx);
+#ifdef CHANGE_COLOR
+extern int count_alt_palette(void);
+extern int alternative_palette(char *);
+extern void change_palette(void);
+#endif
 
 /* ### cmd.c ### */
 
@@ -2842,6 +2847,7 @@ extern void globby_bill_fixup(struct obj *, struct obj *) NONNULLARG12;
 /*extern void globby_donation(struct obj *, struct obj *); */
 extern void credit_report(struct monst *shkp, int idx,
                           boolean silent) NONNULLARG1;
+extern void use_unpaid_trapobj(struct obj *, coordxy, coordxy) NONNULLARG1;
 
 /* ### shknam.c ### */
 
