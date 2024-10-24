@@ -206,6 +206,8 @@ void
 def_raw_print(const char *s)
 {
     puts(s);
+    if (*s)
+        iflags.raw_printed++;
 }
 
 staticfn
@@ -1194,13 +1196,14 @@ dump_fmtstr(
                 break;
             case 'n': /* player name */
                 if (fullsubs)
-                    Sprintf(tmpbuf, "%s", *gp.plname ? gp.plname : "unknown");
+                    Sprintf(tmpbuf, "%s",
+                            *svp.plname ? svp.plname : "unknown");
                 else
                     Strcpy(tmpbuf, "{hero name}");
                 break;
             case 'N': /* first character of player name */
                 if (fullsubs)
-                    Sprintf(tmpbuf, "%c", *gp.plname ? *gp.plname : 'u');
+                    Sprintf(tmpbuf, "%c", *svp.plname ? *svp.plname : 'u');
                 else
                     Strcpy(tmpbuf, "{hero initial}");
                 break;
@@ -1428,7 +1431,7 @@ encglyph(int glyph)
 {
     static char encbuf[20]; /* 10+1 would suffice */
 
-    Sprintf(encbuf, "\\G%04X%04X", gc.context.rndencode, glyph);
+    Sprintf(encbuf, "\\G%04X%04X", svc.context.rndencode, glyph);
     return encbuf;
 }
 
@@ -1447,7 +1450,7 @@ decode_glyph(const char *str, int *glyph_ptr)
         } else
             break;
     }
-    if (rndchk == gc.context.rndencode) {
+    if (rndchk == svc.context.rndencode) {
         *glyph_ptr = dcount = 0;
         for (; *str && ++dcount <= 4; ++str) {
             if ((dp = strchr(hexdd, *str)) != 0) {
@@ -1670,7 +1673,8 @@ choose_classes_menu(const char *prompt,
         case 0:
             idx = def_char_to_monclass(*class_list);
             if (!IndexOk(idx, def_monsyms)) {
-                panic("choose_classes_menu: invalid monclass '%c'", *class_list);
+                panic("choose_classes_menu: invalid monclass '%c'",
+                      *class_list);
                 /*NOTREACHED*/
             }
             text = def_monsyms[idx].explain;
@@ -1680,7 +1684,8 @@ choose_classes_menu(const char *prompt,
         case 1:
             idx = def_char_to_objclass(*class_list);
             if (!IndexOk(idx, def_oc_syms)) {
-                panic("choose_classes_menu: invalid objclass '%c'", *class_list);
+                panic("choose_classes_menu: invalid objclass '%c'",
+                      *class_list);
                 /*NOTREACHED*/
             }
             text = def_oc_syms[idx].explain;
@@ -1792,6 +1797,12 @@ add_menu(
     const char *str,            /* menu text */
     unsigned int itemflags)     /* itemflags such as MENU_ITEMFLAGS_SELECTED */
 {
+    if (!str) {
+        /* if 'str' is Null, just return without adding any menu entry */
+        debugpline0("add_menu(Null)");
+        return;
+    }
+
     if (iflags.use_menu_color) {
         if ((itemflags & MENU_ITEMFLAGS_SKIPMENUCOLORS) == 0)
             (void) get_menu_coloring(str, &color, &attr);
@@ -1812,7 +1823,7 @@ add_menu_heading(winid tmpwin, const char *buf)
         color = iflags.menu_headings.color;
 
     /* suppress highlighting during end-of-game disclosure */
-    if (gp.program_state.gameover)
+    if (program_state.gameover)
         attr = ATR_NONE, color = NO_COLOR;
 
     add_menu(tmpwin, &nul_glyphinfo, &any, '\0', '\0', attr, color,
@@ -1860,10 +1871,10 @@ getlin(const char *query, char *bufp)
 {
     boolean old_bot_disabled = gb.bot_disabled;
 
-    gp.program_state.in_getlin = 1;
+    program_state.in_getlin = 1;
     gb.bot_disabled = TRUE;
     (*windowprocs.win_getlin)(query, bufp);
     gb.bot_disabled = old_bot_disabled;
-    gp.program_state.in_getlin = 0;
+    program_state.in_getlin = 0;
 }
 /*windows.c*/

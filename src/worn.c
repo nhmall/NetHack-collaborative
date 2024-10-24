@@ -1,4 +1,4 @@
-/* NetHack 3.7	worn.c	$NHDT-Date: 1707547726 2024/02/10 06:48:46 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.100 $ */
+/* NetHack 3.7	worn.c	$NHDT-Date: 1715109581 2024/05/07 19:19:41 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.109 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2013. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -7,7 +7,8 @@
 
 staticfn void m_lose_armor(struct monst *, struct obj *, boolean) NONNULLPTRS;
 staticfn void clear_bypass(struct obj *) NO_NNARGS;
-staticfn void m_dowear_type(struct monst *, long, boolean, boolean) NONNULLARG1;
+staticfn void m_dowear_type(struct monst *, long, boolean, boolean)
+                                                                  NONNULLARG1;
 staticfn int extra_pref(struct monst *, struct obj *) NONNULLARG1;
 
 static const struct worn {
@@ -550,12 +551,7 @@ update_mon_extrinsics(
         case JUMPING:
             break;
         default:
-            /* 1 through 8 correspond to MR_xxx mask values */
-            if (which >= 1 && which <= 8) {
-                /* FIRE,COLD,SLEEP,DISINT,SHOCK,POISON,ACID,STONE */
-                mask = (uchar) (1 << (which - 1));
-                mon->mextrinsics |= (unsigned short) mask;
-            }
+            mon->mextrinsics |= (unsigned short) res_to_mr(which);
             break;
         }
     } else { /* off */
@@ -592,7 +588,7 @@ update_mon_extrinsics(
              * only one pass but a worn alchemy smock will be an
              * alternate source for either of those two resistances.
              */
-            mask = (uchar) (1 << (which - 1));
+            mask = res_to_mr(which);
             for (otmp = mon->minvent; otmp; otmp = otmp->nobj) {
                 if (otmp == obj || !otmp->owornmask)
                     continue;
@@ -727,7 +723,7 @@ staticfn void
 m_dowear_type(
     struct monst *mon,
     long flag,               /* wornmask value */
-    boolean creation,
+    boolean creation,        /* no wear messages when mon is being created */
     boolean racialexception) /* small monsters that are allowed for player
                               * races (gnomes) can wear suits */
 {
@@ -851,14 +847,31 @@ m_dowear_type(
 
     if (!creation) {
         if (sawmon) {
-            char buf[BUFSZ];
+            char buf[BUFSZ], oldarm[BUFSZ], newarm[BUFSZ + sizeof "another "];
 
-            if (old)
-                Sprintf(buf, " removes %s and", distant_name(old, doname));
-            else
-                buf[0] = '\0';
-            pline("%s%s puts on %s.", Monnam(mon), buf,
-                  distant_name(best, doname));
+            /* "<Mon> [removes <oldarm> and ]puts on <newarm>."
+               uses accessory verbs for armor but we can live with that */
+            if (old) {
+                Strcpy(oldarm, distant_name(old, doname));
+                Snprintf(buf, sizeof buf, " removes %s and", oldarm);
+            } else {
+                buf[0] = oldarm[0] = '\0';
+            }
+            Strcpy(newarm, distant_name(best, doname));
+            /* a monster will swap an item of the same type as the one it
+               is replacing when the enchantment is better;
+               if newarm and oldarm have identical descriptions, substitute
+               "another <newarm>" for "a|an <newarm>" */
+            if (!strcmpi(newarm, oldarm)) {
+                /* size of newarm[] has been overallocated to guarantee
+                   enough room to insert "another " */
+                if (!strncmpi(newarm, "a ", 2))
+                    (void) strsubst(newarm, "a ", "another ");
+                else if (!strncmpi(newarm, "an ", 3))
+                    (void) strsubst(newarm, "an ", "another ");
+                newarm[BUFSZ - 1] = '\0';
+            }
+            pline("%s%s puts on %s.", Monnam(mon), buf, newarm);
             if (autocurse)
                 pline("%s %s %s %s for a moment.", s_suffix(Monnam(mon)),
                       simpleonames(best), otense(best, "glow"),
@@ -976,7 +989,7 @@ clear_bypass(struct obj *objchn)
 
 /* all objects with their bypass bit set should now be reset to normal;
    this can be a relatively expensive operation so is only called if
-   gc.context.bypasses is set */
+   svc.context.bypasses is set */
 void
 clear_bypasses(void)
 {
@@ -985,15 +998,16 @@ clear_bypasses(void)
     /*
      * 'Object' bypass is also used for one monster function:
      * polymorph control of long worms.  Activated via setting
-     * gc.context.bypasses even if no specific object has been
+     * svc.context.bypasses even if no specific object has been
      * bypassed.
      */
 
     clear_bypass(fobj);
     clear_bypass(gi.invent);
     clear_bypass(gm.migrating_objs);
-    clear_bypass(gl.level.buriedobjlist);
+    clear_bypass(svl.level.buriedobjlist);
     clear_bypass(gb.billobjs);
+    clear_bypass(go.objs_deleted);
     for (mtmp = fmon; mtmp; mtmp = mtmp->nmon) {
         if (DEADMONSTER(mtmp))
             continue;
@@ -1022,14 +1036,14 @@ clear_bypasses(void)
     if (uchain)
         uchain->bypass = 0;
 
-    gc.context.bypasses = FALSE;
+    svc.context.bypasses = FALSE;
 }
 
 void
 bypass_obj(struct obj *obj)
 {
     obj->bypass = 1;
-    gc.context.bypasses = TRUE;
+    svc.context.bypasses = TRUE;
 }
 
 /* set or clear the bypass bit in a list of objects */
@@ -1039,7 +1053,7 @@ bypass_objlist(
     boolean on) /* TRUE => set, FALSE => clear */
 {
     if (on && objchain)
-        gc.context.bypasses = TRUE;
+        svc.context.bypasses = TRUE;
     while (objchain) {
         objchain->bypass = on ? 1 : 0;
         objchain = objchain->nobj;
