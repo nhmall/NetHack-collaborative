@@ -531,9 +531,10 @@ Example:
 === exclusion
 
 Exclude an area of the map from being randomly chosen target when
-falling or teleporting into the level.  Multiple exclusions per level are allowed.
+falling or teleporting into the level, or creating a monster.
+Multiple exclusions per level are allowed.
 
-* type is one of "teleport", "teleport-up", or "teleport-down".
+* type is one of "teleport", "teleport-up", "teleport-down", or "monster-generation".
 
 Example:
 
@@ -1002,7 +1003,8 @@ Example:
 
 === trap
 
-Create a trap. The `launchfrom` is relative to the rolling boulder trap coord.
+Create a trap. The `launchfrom` is relative to the rolling boulder trap coord,
+but `teledest` is absolute.
 
 Example:
 
@@ -1011,6 +1013,7 @@ Example:
  des.trap({ type = "web", coord = {2, 2}, spider_on_web = false, seen = true });
  des.trap({ type = "falling rock", victim = false });
  des.trap({ type = "rolling boulder", coord = {7, 5}, launchfrom = {-2, -2} });
+ des.trap({ type = "teleport", coord = {7, 5}, teledest = {2, 2} });
  des.trap("hole", 3, 4);
  des.trap("level teleport", {5, 8});
  des.trap("rust")

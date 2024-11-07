@@ -351,10 +351,10 @@ MenuWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         return FALSE;
 
     case WM_CLOSE:
-        if (gp.program_state.gameover) {
+        if (program_state.gameover) {
             data->result = -1;
             data->done = 1;
-            gp.program_state.stopprint++;
+            program_state.stopprint++;
             return TRUE;
         } else
             return FALSE;
@@ -1192,7 +1192,7 @@ onDrawItem(HWND hWnd, WPARAM wParam, LPARAM lParam)
                           data->menui.menu.items[lpdis->itemID].count);
             }
 
-            /* TOOD: add blinking for blink text */
+            /* TODO: add blinking for blink text */
 
             cached_font * blink_font = mswin_get_font(NHW_MENU, ATR_BLINK, lpdis->hDC, FALSE);
             SelectObject(lpdis->hDC, blink_font->hFont);
@@ -1532,6 +1532,8 @@ onListChar(HWND hWnd, HWND hwndList, WORD ch)
                 int iter = topIndex;
                 do {
                     i = iter % data->menui.menu.size;
+                    if (iflags.debug_fuzzer && iter > 1000000)
+                        ch = data->menui.menu.items[i].accelerator;
                     if (data->menui.menu.items[i].accelerator == ch) {
                         if (data->how == PICK_ANY) {
                             SelectMenuItem(

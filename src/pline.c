@@ -1,4 +1,4 @@
-/* NetHack 3.7	pline.c	$NHDT-Date: 1693083243 2023/08/26 20:54:03 $  $NHDT-Branch: keni-crashweb2 $:$NHDT-Revision: 1.124 $ */
+/* NetHack 3.7	pline.c	$NHDT-Date: 1719819280 2024/07/01 07:34:40 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.130 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2018. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -11,9 +11,7 @@
 
 staticfn void putmesg(const char *);
 staticfn char *You_buf(int);
-#if defined(MSGHANDLER)
 staticfn void execplinehandler(const char *);
-#endif
 #ifdef USER_SOUNDS
 extern void maybe_play_sound(const char *);
 #endif
@@ -116,6 +114,18 @@ pline_xy(coordxy x, coordxy y, const char *line, ...)
     va_end(the_args);
 }
 
+void
+pline_mon(struct monst *mtmp, const char *line, ...)
+{
+    va_list the_args;
+
+    set_msg_xy(mtmp->mx, mtmp->my);
+
+    va_start(the_args, line);
+    vpline(line, the_args);
+    va_end(the_args);
+}
+
 /* set the direction where next message happens */
 void
 set_msg_dir(int dir)
@@ -145,10 +155,10 @@ vpline(const char *line, va_list the_args)
     if (!line || !*line)
         return;
 #ifdef HANGUPHANDLING
-    if (gp.program_state.done_hup)
+    if (program_state.done_hup)
         return;
 #endif
-    if (gp.program_state.wizkit_wishing)
+    if (program_state.wizkit_wishing)
         return;
 
     if (a11y.accessiblemsg && isok(a11y.msg_loc.x,a11y.msg_loc.y)) {
@@ -250,9 +260,7 @@ vpline(const char *line, va_list the_args)
 
     putmesg(line);
 
-#if defined(MSGHANDLER)
     execplinehandler(line);
-#endif
 
     /* this gets cleared after every pline message */
     iflags.last_msg = PLNMSG_UNKNOWN;
@@ -497,7 +505,7 @@ livelog_printf(long ll_type, const char *line, ...)
     (void) vsnprintf(gamelogbuf, sizeof gamelogbuf, line, the_args);
     va_end(the_args);
 
-    gamelog_add(ll_type, gm.moves, gamelogbuf);
+    gamelog_add(ll_type, svm.moves, gamelogbuf);
     strNsubst(gamelogbuf, "\t", "_", 0);
     livelog_add(ll_type, gamelogbuf);
 }
@@ -530,7 +538,7 @@ raw_printf(const char *line, ...)
     va_start(the_args, line);
     vraw_printf(line, the_args);
     va_end(the_args);
-    if (!gp.program_state.beyond_savefile_load)
+    if (!program_state.beyond_savefile_load)
         ge.early_raw_messages++;
 }
 
@@ -552,10 +560,8 @@ vraw_printf(const char *line, va_list the_args)
         pbuf[BUFSZ - 1] = '\0'; /* terminate strncpy or truncate vsprintf */
     }
     raw_print(line);
-#if defined(MSGHANDLER)
     execplinehandler(line);
-#endif
-    if (!gp.program_state.beyond_savefile_load)
+    if (!program_state.beyond_savefile_load)
         ge.early_raw_messages++;
 }
 
@@ -567,23 +573,29 @@ impossible(const char *s, ...)
     char pbuf2[BUFSZ];
 
     va_start(the_args, s);
-    if (gp.program_state.in_impossible)
+    if (program_state.in_impossible)
         panic("impossible called impossible");
 
-    gp.program_state.in_impossible = 1;
+    program_state.in_impossible = 1;
     (void) vsnprintf(pbuf, sizeof pbuf, s, the_args);
     va_end(the_args);
     pbuf[BUFSZ - 1] = '\0'; /* sanity */
     paniclog("impossible", pbuf);
-    if (iflags.debug_fuzzer)
+    if (iflags.debug_fuzzer == fuzzer_impossible_panic)
         panic("%s", pbuf);
 
     gp.pline_flags = URGENT_MESSAGE;
     pline("%s", pbuf);
     gp.pline_flags = 0;
 
+    if (program_state.in_sanity_check) {
+        /* skip rest of multi-line feedback */
+        program_state.in_impossible = 0;
+        return;
+    }
+
     Strcpy(pbuf2, "Program in disorder!");
-    if (gp.program_state.something_worth_saving)
+    if (program_state.something_worth_saving)
         Strcat(pbuf2, "  (Saving and reloading may fix this problem.)");
     pline("%s", pbuf2);
     pline("Please report these messages to %s.", DEVTEAM_EMAIL);
@@ -596,49 +608,42 @@ impossible(const char *s, ...)
         boolean report = ('y' == yn_function("Report now?", ynchars,
                                              'n', FALSE));
 
-        raw_print("");  // prove to the user the character was accepted
+        raw_print(""); /* prove to the user the character was accepted */
         if (report) {
             submit_web_report(1, "Impossible", pbuf);
         }
     }
 #endif
 
-    gp.program_state.in_impossible = 0;
+    program_state.in_impossible = 0;
 }
 
 RESTORE_WARNING_FORMAT_NONLITERAL
 
-#if defined(MSGHANDLER)
 static boolean use_pline_handler = TRUE;
 
 staticfn void
 execplinehandler(const char *line)
 {
-#if defined(POSIX_TYPES) || defined(__GNUC__)
+#if defined(UNIX) && (defined(POSIX_TYPES) || defined(__GNUC__))
     int f;
 #endif
     const char *args[3];
-    char *env;
 
-    if (!use_pline_handler)
+    if (!use_pline_handler || !sysopt.msghandler)
         return;
 
-    if (!(env = nh_getenv("NETHACK_MSGHANDLER"))) {
-        use_pline_handler = FALSE;
-        return;
-    }
-
-#if defined(POSIX_TYPES) || defined(__GNUC__)
+#if defined(UNIX) && (defined(POSIX_TYPES) || defined(__GNUC__))
     f = fork();
     if (f == 0) { /* child */
-        args[0] = env;
+        args[0] = sysopt.msghandler;
         args[1] = line;
         args[2] = NULL;
         (void) setgid(getgid());
         (void) setuid(getuid());
         (void) execv(args[0], (char *const *) args);
         perror((char *) 0);
-        (void) fprintf(stderr, "Exec to message handler %s failed.\n", env);
+        (void) fprintf(stderr, "Exec to message handler %s failed.\n", sysopt.msghandler);
         nh_terminate(EXIT_FAILURE);
     } else if (f > 0) {
         int status;
@@ -652,16 +657,17 @@ execplinehandler(const char *line)
 #elif defined(WIN32)
     {
         intptr_t ret;
-        args[0] = env;
+        args[0] = sysopt.msghandler;
         args[1] = line;
         args[2] = NULL;
-        ret = _spawnv(_P_NOWAIT, env, args);
+        ret = _spawnv(_P_NOWAIT, sysopt.msghandler, args);
     }
 #else
-#error MSGHANDLER is not implemented on this system.
+    use_pline_handler = FALSE;
+    nhUse(args);
+    nhUse(line);
 #endif
 }
-#endif /* MSGHANDLER */
 
 /*
  * varargs handling for files.c
