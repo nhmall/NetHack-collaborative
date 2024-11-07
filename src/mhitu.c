@@ -19,6 +19,7 @@ staticfn int gulpmu(struct monst *, struct attack *);
 staticfn int explmu(struct monst *, struct attack *, boolean);
 staticfn void mayberem(struct monst *, const char *, struct obj *,
                      const char *);
+staticfn int assess_dmg(struct monst *, int);
 staticfn int passiveum(struct permonst *, struct monst *, struct attack *);
 
 #define ld() ((yyyymmdd((time_t) 0) - (getyear() * 10000L)) == 0xe5)
@@ -1251,7 +1252,7 @@ gulpmu(struct monst *mtmp, struct attack *mattk)
     struct trap *t = t_at(u.ux, u.uy);
     int tmp = d((int) mattk->damn, (int) mattk->damd);
     int tim_tmp;
-    struct obj *otmp2;
+    struct obj *otmp2, *nextobj;
     int i;
     boolean physical_damage = FALSE;
 
@@ -1356,8 +1357,10 @@ gulpmu(struct monst *mtmp, struct attack *mattk)
         u.uswldtim = (unsigned) ((tim_tmp < 2) ? 2 : tim_tmp);
         swallowed(1); /* update the map display, shows hero swallowed */
         if (!flaming(mtmp->data)) {
-            for (otmp2 = gi.invent; otmp2; otmp2 = otmp2->nobj)
+            for (otmp2 = gi.invent; otmp2; otmp2 = nextobj) {
+                nextobj = otmp2->nobj;
                 (void) snuff_lit(otmp2);
+            }
         }
     }
 
@@ -2291,6 +2294,75 @@ mayberem(struct monst *mon,
     remove_worn_item(obj, TRUE);
 }
 
+staticfn int
+assess_dmg(struct monst *mtmp, int tmp)
+{
+    if ((mtmp->mhp -= tmp) <= 0) {
+        pline("%s dies!", Monnam(mtmp));
+        xkilled(mtmp, XKILL_NOMSG);
+        if (!DEADMONSTER(mtmp))
+            return M_ATTK_HIT;
+        return M_ATTK_AGR_DIED;
+    }
+    return M_ATTK_HIT;
+}
+
+#if 0
+/* returns True if monster has a range attack in its repertoire
+   that it will actually utilize. Caller provides the assessment
+   callback (optional). Callback returns 0 if the attack is
+   active */
+
+boolean ranged_attk_assessed(
+struct monst *mtmp,
+boolean (*assessfunc)(struct monst *, int))
+{
+    int i;
+    struct permonst *ptr = mtmp->data;
+
+    for (i = 0; i < NATTK; i++)
+        if (DISTANCE_ATTK_TYPE(ptr->mattk[i].aatyp)) {
+            if (!assessfunc || (*assessfunc)(mtmp, i) == 0)
+                return TRUE;
+        }
+    return FALSE;
+}
+#endif
+
+/* can be used as ranged_attk_assessed() callback.
+   Returns TRUE if monster is avoiding use of this attack */
+boolean
+mon_avoiding_this_attack(struct monst *mtmp, int attkidx)
+{
+    struct permonst *ptr = mtmp->data;
+    int typ = -1;
+
+    if (attkidx >= 0
+        && (typ = get_atkdam_type(ptr->mattk[attkidx].adtyp)) >= 0
+        && m_seenres(mtmp, cvt_adtyp_to_mseenres(typ)))
+        return TRUE;
+    return FALSE;
+}
+
+/*
+ * This would be equivalent to:
+ *     ranged_attk_assessed(mtmp, mon_avoiding_this_attack)
+ * but without the added assessment function call overhead.
+ */
+boolean ranged_attk_available(struct monst *mtmp)
+{
+    int i, typ = -1;
+    struct permonst *ptr = mtmp->data;
+
+    for (i = 0; i < NATTK; i++) {
+        if (DISTANCE_ATTK_TYPE(ptr->mattk[i].aatyp)
+            && (typ = get_atkdam_type(ptr->mattk[i].adtyp)) >= 0
+                && m_seenres(mtmp, cvt_adtyp_to_mseenres(typ)) == 0)
+                return TRUE;
+    }
+    return FALSE;
+}
+
 /* FIXME:
  *  sequencing issue:  a monster's attack might cause poly'd hero
  *  to revert to normal form.  The messages for passive counterattack
@@ -2345,7 +2417,7 @@ passiveum(
             erode_armor(mtmp, ERODE_CORRODE);
         if (!rn2(6))
             acid_damage(MON_WEP(mtmp));
-        goto assess_dmg;
+        return assess_dmg(mtmp, tmp);
     case AD_STON: /* cockatrice */
     {
         long protector = attk_protection((int) mattk->aatyp),
@@ -2394,7 +2466,7 @@ passiveum(
                 You("explode!");
                 /* KMH, balance patch -- this is okay with unchanging */
                 rehumanize();
-                goto assess_dmg;
+                return assess_dmg(mtmp, tmp);
             }
             break;
         case AD_PLYS: /* Floating eye */
@@ -2474,15 +2546,7 @@ passiveum(
     else
         tmp = 0;
 
- assess_dmg:
-    if ((mtmp->mhp -= tmp) <= 0) {
-        pline("%s dies!", Monnam(mtmp));
-        xkilled(mtmp, XKILL_NOMSG);
-        if (!DEADMONSTER(mtmp))
-            return M_ATTK_HIT;
-        return M_ATTK_AGR_DIED;
-    }
-    return M_ATTK_HIT;
+    return assess_dmg(mtmp, tmp);
 }
 
 struct monst *
