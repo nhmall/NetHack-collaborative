@@ -1,4 +1,4 @@
-/* NetHack 3.7	objnam.c	$NHDT-Date: 1711809641 2024/03/30 14:40:41 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.427 $ */
+/* NetHack 3.7	objnam.c	$NHDT-Date: 1732979463 2024/11/30 07:11:03 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.439 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2011. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -677,6 +677,7 @@ xname_flags(
     case WEAPON_CLASS:
         if (is_poisonable(obj) && obj->opoisoned)
             Strcpy(buf, "poisoned ");
+        FALLTHROUGH;
         /*FALLTHRU*/
     case VENOM_CLASS:
     case TOOL_CLASS:
@@ -1391,6 +1392,7 @@ doname_base(
                     ConcatF1(bp, 1, ", %s lit)", arti_light_description(obj));
             }
         }
+        FALLTHROUGH;
         /*FALLTHRU*/
     case WEAPON_CLASS:
         if (ispoisoned)
@@ -2475,7 +2477,7 @@ static const char wrpsym[] = { WAND_CLASS,   RING_CLASS,   POTION_CLASS,
 
 /* return form of the verb (input plural) if xname(otmp) were the subject */
 char *
-otense(struct obj* otmp,const char * verb)
+otense(struct obj *otmp, const char *verb)
 {
     char *buf;
 
@@ -5077,7 +5079,8 @@ readobjnam(char *bp, struct obj *no_wish)
         break;
     case SLIME_MOLD:
         d.otmp->spe = d.ftype;
-    /* Fall through */
+        FALLTHROUGH;
+    /* FALLTHRU */
     case SKELETON_KEY:
     case CHEST:
     case LARGE_BOX:
@@ -5109,7 +5112,8 @@ readobjnam(char *bp, struct obj *no_wish)
     /* scroll of mail:  0: delivered in-game via external event (or randomly
        for fake mail); 1: from bones or wishing; 2: written with marker */
     case SCR_MAIL:
-        /*FALLTHRU*/
+        d.otmp->spe = 1;
+	break;
 #endif
     /* splash of venom:  0: normal, and transitory; 1: wishing */
     case ACID_VENOM:
@@ -5121,6 +5125,7 @@ readobjnam(char *bp, struct obj *no_wish)
             d.otmp->spe = (rn2(10) ? -1 : 0);
             break;
         }
+        FALLTHROUGH;
         /*FALLTHRU*/
     default:
         d.otmp->spe = d.spe;
