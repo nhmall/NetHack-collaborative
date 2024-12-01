@@ -403,7 +403,8 @@ fix_worst_trouble(int trouble)
         break;
     case TROUBLE_STARVING:
         /* temporarily lost strength recovery now handled by init_uhunger() */
-        /*FALLTHRU*/
+        FALLTHROUGH;
+	/* FALLTHRU*/
     case TROUBLE_HUNGRY:
         Your("%s feels content.", body_part(STOMACH));
         init_uhunger();
@@ -745,7 +746,9 @@ angrygods(aligntyp resp_god)
             gods_angry(resp_god);
             punish((struct obj *) 0);
             break;
-        } /* else fall thru */
+        }
+	FALLTHROUGH;
+	/* FALLTHRU */
     case 4:
     case 5:
         gods_angry(resp_god);
@@ -1127,6 +1130,7 @@ pleased(aligntyp g_align)
         switch (min(action, 5)) {
         case 5:
             pat_on_head = 1;
+            FALLTHROUGH;
             /*FALLTHRU*/
         case 4:
             do
@@ -1135,9 +1139,12 @@ pleased(aligntyp g_align)
             break;
 
         case 3:
+            /* up to 10 troubles */
             fix_worst_trouble(trouble);
-        case 2:
-            /* arbitrary number of tries */
+            FALLTHROUGH;
+            /*FALLTHRU*/
+	    case 2:
+            /* up to 9 troubles */
             while ((trouble = in_trouble()) > 0 && (++tryct < 10))
                 fix_worst_trouble(trouble);
             break;
@@ -1145,6 +1152,7 @@ pleased(aligntyp g_align)
         case 1:
             if (trouble > 0)
                 fix_worst_trouble(trouble);
+            break;
         case 0:
             break; /* your god blows you off, too bad */
         }
@@ -1231,6 +1239,7 @@ pleased(aligntyp g_align)
                     break;
                 }
             }
+            FALLTHROUGH;
             /*FALLTHRU*/
         case 2:
             if (!Blind)
@@ -1332,6 +1341,7 @@ pleased(aligntyp g_align)
                 gcrownu();
                 break;
             }
+            FALLTHROUGH;
             /*FALLTHRU*/
         case 6:
             give_spell();
@@ -2332,18 +2342,23 @@ maybe_turn_mon_iter(struct monst *mtmp)
                    than zombies. */
             case S_LICH:
                 xlev += 2;
+                FALLTHROUGH;
                 /*FALLTHRU*/
             case S_GHOST:
                 xlev += 2;
+                FALLTHROUGH;
                 /*FALLTHRU*/
             case S_VAMPIRE:
                 xlev += 2;
+                FALLTHROUGH;
                 /*FALLTHRU*/
             case S_WRAITH:
                 xlev += 2;
+                FALLTHROUGH;
                 /*FALLTHRU*/
             case S_MUMMY:
                 xlev += 2;
+                FALLTHROUGH;
                 /*FALLTHRU*/
             case S_ZOMBIE:
                 if (u.ulevel >= xlev && !resist(mtmp, '\0', 0, NOTELL)) {
@@ -2355,6 +2370,7 @@ maybe_turn_mon_iter(struct monst *mtmp)
                     }
                     break;
                 } /* else flee */
+                FALLTHROUGH;
                 /*FALLTHRU*/
             default:
                 monflee(mtmp, 0, FALSE, TRUE);
@@ -2653,6 +2669,7 @@ blocked_boulder(int dx, int dy)
         /* this is only approximate since multiple boulders might sink */
         if (is_pool_or_lava(nx, ny)) /* does its own isok() check */
             break; /* still need Sokoban check below */
+        FALLTHROUGH;
         /*FALLTHRU*/
     default:
         /* more than one boulder--blocked after they push the top one;

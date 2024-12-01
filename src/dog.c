@@ -417,6 +417,12 @@ mon_arrive(struct monst *mtmp, int when)
     fromdlev.dnum = mtmp->mtrack[2].x;
     fromdlev.dlevel = mtmp->mtrack[2].y;
     mon_track_clear(mtmp);
+    /* in case Protection_from_shape_changers is different now from when
+       'mtmp' went onto the migrating monsters list; that's handled in
+       getlev() when returning to a previously visited level and by the
+       special level code for monsters specified in the level, but needed
+       here for monsters migrating to a newly created level */
+    restore_cham(mtmp);
 
     if (mtmp == u.usteed)
         return; /* don't place steed on the map */
@@ -517,7 +523,9 @@ mon_arrive(struct monst *mtmp, int when)
         } else if (!(u.uevent.qexpelled
                      && (Is_qstart(&u.uz0) || Is_qstart(&u.uz)))) {
             impossible("mon_arrive: no corresponding portal?");
-        } /*FALLTHRU*/
+        }
+        FALLTHROUGH;
+        /*FALLTHRU*/
     default:
     case MIGR_RANDOM:
         xlocale = ylocale = 0;
@@ -1070,6 +1078,7 @@ dogfood(struct monst *mon, struct obj *obj)
             && obj->oclass != BALL_CLASS
             && obj->oclass != CHAIN_CLASS)
             return APPORT;
+        FALLTHROUGH;
         /*FALLTHRU*/
     case ROCK_CLASS:
         return UNDEF;

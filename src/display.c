@@ -528,6 +528,7 @@ display_monster(
         default:
             impossible("display_monster:  bad m_ap_type value [ = %d ]",
                        (int) mon->m_ap_type);
+            FALLTHROUGH;
             /*FALLTHRU*/
         case M_AP_NOTHING:
             show_glyph(x, y, mon_to_glyph(mon, newsym_rn2));
@@ -3101,7 +3102,8 @@ check_pos(coordxy x, coordxy y, int which)
     if (!isok(x, y))
         return which;
     type = levl[x][y].typ;
-    if (IS_STWALL(type) || IS_CORR(type) || IS_SDOOR(type))
+    /* Everything below POOL, excluding TREE */
+    if (IS_STWALL(type) || type == CORR || type == SCORR || IS_SDOOR(type))
         return which;
     return 0;
 }
@@ -3565,6 +3567,7 @@ wall_angle(struct rm *lev)
     case SDOOR:
         if (lev->horizontal)
             goto horiz;
+        FALLTHROUGH;
         /*FALLTHRU*/
     case VWALL:
         switch (lev->wall_info & WM_MASK) {
