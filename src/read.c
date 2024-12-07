@@ -1038,6 +1038,12 @@ maybe_tame(struct monst *mtmp, struct obj *sobj)
            not tame the target, so call it even if taming gets resisted */
         if (!resist(mtmp, sobj->oclass, 0, NOTELL) || mtmp->isshk)
             (void) tamedog(mtmp, (struct obj *) 0, FALSE);
+        if (sobj->blessed && was_tame && mtmp->mtame) {
+            int new_tame = min(10, ACURR(A_CHA) / 2);
+
+            if (mtmp->mtame < new_tame)
+                mtmp->mtame = new_tame;
+        }
         if ((!was_peaceful && mtmp->mpeaceful) || (!was_tame && mtmp->mtame))
             return 1;
     }
@@ -1273,6 +1279,21 @@ seffect_destroy_armor(struct obj **sobjp)
         return;
     }
     if (!scursed || !otmp || !otmp->cursed) {
+        boolean gets_choice = (otmp && sobj && sobj->blessed
+                               && count_worn_armor() > 1);
+
+        if (gets_choice) {
+            struct obj *atmp;
+
+            if (!objects[sobj->otyp].oc_name_known)
+                pline("This is %s!", an(actualoname(sobj)));
+            gk.known = TRUE;
+            atmp = getobj("destroy", any_worn_armor_ok, GETOBJ_PROMPT);
+            /* check the return value, if user picked non-valid obj */
+            if (any_worn_armor_ok(atmp) == GETOBJ_SUGGEST)
+                otmp = atmp;
+        }
+
         if (!destroy_arm(otmp)) {
             strange_feeling(sobj, "Your skin itches.");
             *sobjp = 0; /* useup() in strange_feeling() */
