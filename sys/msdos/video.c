@@ -14,6 +14,7 @@
  */
 
 #include "hack.h"
+#include "wintty.h"
 
 #ifndef STUBVIDEO
 #include "pcvideo.h"
@@ -88,6 +89,14 @@ get_scr_size(void)
         txt_get_scr_size();
 }
 
+#ifdef ENHANCED_SYMBOLS
+void g_pututf8(uint8 *utf8str)
+{
+    /* not implemented for msdos (yet) */
+    nhUse(utf8str);
+}
+#endif
+
 /*
  * --------------------------------------------------------------
  * The rest of this file is only compiled if NO_TERMS is defined.
@@ -96,7 +105,6 @@ get_scr_size(void)
 
 #ifdef NO_TERMS
 
-#include <ctype.h>
 #include "wintty.h"
 
 #ifdef __GO32__
