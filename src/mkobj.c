@@ -522,7 +522,7 @@ next_ident(void)
        uses 16-bit 'int'), just live with that and hope no o_id conflicts
        between objects or m_id conflicts between monsters arise */
     if (!svc.context.ident)
-        svc.context.ident = rnd(2);
+        svc.context.ident = rnd(2) + 1;   /* id 1 is reserved */
 
     return res;
 }
@@ -852,6 +852,7 @@ unknow_object(struct obj *obj)
 
     obj->bknown = obj->rknown = 0;
     obj->cknown = obj->lknown = 0;
+    obj->tknown = 0;
     /* for an existing object, awareness of charges or enchantment has
        gone poof...  [object types which don't use the known flag have
        it set True for some reason] */
@@ -880,7 +881,7 @@ mksobj_init(struct obj *otmp, boolean artif)
             otmp->opoisoned = 1;
 
         if (artif && !rn2(20 + (10 * nartifact_exist())))
-            otmp = mk_artifact(otmp, (aligntyp) A_NONE);
+            otmp = mk_artifact(otmp, (aligntyp) A_NONE, 99, TRUE);
         break;
     case FOOD_CLASS:
         otmp->oeaten = 0;
@@ -1000,6 +1001,7 @@ mksobj_init(struct obj *otmp, boolean artif)
         case LARGE_BOX:
             otmp->olocked = !!(rn2(5));
             otmp->otrapped = !(rn2(10));
+            otmp->tknown = otmp->otrapped && !rn2(100); /* obvious trap */
             FALLTHROUGH;
             /*FALLTHRU*/
         case ICE_BOX:
@@ -1084,7 +1086,7 @@ mksobj_init(struct obj *otmp, boolean artif)
         } else
             blessorcurse(otmp, 10);
         if (artif && !rn2(40 + (10 * nartifact_exist())))
-            otmp = mk_artifact(otmp, (aligntyp) A_NONE);
+            otmp = mk_artifact(otmp, (aligntyp) A_NONE, 99, TRUE);
         /* simulate lacquered armor for samurai */
         if (Role_if(PM_SAMURAI) && otmp->otyp == SPLINT_MAIL
             && (svm.moves <= 1 || In_quest(&u.uz))) {
@@ -1230,7 +1232,7 @@ mksobj(int otyp, boolean init, boolean artif)
 
     /* unique objects may have an associated artifact entry */
     if (objects[otyp].oc_unique && !otmp->oartifact)
-        otmp = mk_artifact(otmp, (aligntyp) A_NONE);
+        otmp = mk_artifact(otmp, (aligntyp) A_NONE, 99, FALSE);
     otmp->owt = weight(otmp);
     return otmp;
 }

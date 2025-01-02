@@ -1484,8 +1484,18 @@ when hero who is poly'd into metallivore form eats a tin, bypass "smells like
 digging in ice was handled inconsistently, particularly if done at the span
 	spot in front of closed drawbridge
 angry god may remove an intrinsic
-blessed scroll of taming increases tameness of already tame creatures
-blessed scroll of destroy armor asks which armor to destroy
+gelatinous cubes eat organic objects inside them
+pets with reflection were unwilling to attack floating eyes
+artifact gifts are rebalanced (easier to obtain; higher-value sacrifices are
+	needed for higher-value artifacts; lower-value artifacts are usually
+	gifted enchanted; unaligned artifacts are possible but rare even on
+	the first gift; artifacts you can't use well are less likely)
+luck gains from sacrificing are limited by the value of the sacrifice
+failed #untrap could move hero diagonally into or out of an open doorway
+remember box is trapped after finding the trap
+when you hear a monster incant a scroll, ensure that the 'I' invisible
+	monster indicator doesn't trump telepathy briefly
+proceed with showpaths option even if the sysconf file is missing
 
 
 Fixes to 3.7.0-x General Problems Exposed Via git Repository
@@ -2064,6 +2074,15 @@ non-fireproof water walking boots wouldn't be burnt up if fire resistant hero
 	at wall locations
 if a pile of objects had plain arrow(s) on top, map location classification
 	got confused and reported 'unexplored area'
+when the 'fireassist' option was on, 'f' would choose uquiver over wielded
+	throw-and-return uwep
+knockback could move hero diagonally into or out of an open doorway
+farlook of /e or /E stopped reporting engraving and headstone text after a fix
+	for the situation where // or ; reported such text when there was an
+	object or monster in the way
+message was garbled when lightning or acid breath hit iron bars
+shop bug: buying a container with unpaid items in it could produce impossible
+	"unpaid_cost: object not on any bill" warnings
 
 
 Fixes to 3.7.0-x Platform and/or Interface Problems Exposed Via git Repository
@@ -2580,7 +2599,7 @@ menu for what-is command supports /^ and /" to view a list of nearby or whole
 	level visible and remembered traps
 spiders will occasionally spin webs when moving around
 drinking a burning potion of oil will cure being turned into slime
-new bigroom variant, a boulder maze
+new bigroom variants, a boulder maze and hexagons
 vomiting on an altar provokes the deities wrath
 branch stairs have a different glyph, show up in yellow color in tty
 duration of confusion when drinking booze depends upon hunger state
@@ -2730,9 +2749,12 @@ enlightenment/attribute disclosure for saving-grace: include a line for have
 	"X " for explore mode, or "D " for debug mode if any of the games
 	shown in its menu weren't saved during normal play; if they're all
 	normal play, the prefix is suppressed
-tourists gain experience by seeing new types of creatures up close, and
+tourists gain experience by "taking photos" of new creatures, and
 	going to new dungeon levels
 healers gain experience by healing pets
+blessed scroll of destroy armor asks which armor to destroy
+archeologists' fedora is lucky
+telepathic hero can discern which particular monster just read a scroll
 
 
 Platform- and/or Interface-Specific New Features

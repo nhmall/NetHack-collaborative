@@ -257,8 +257,13 @@ vpline(const char *line, va_list the_args)
             goto pline_done;
     }
 
-    if (gv.vision_full_recalc)
+    if (gv.vision_full_recalc) {
+        int tmp_in_pline = in_pline;
+
+        in_pline = 0;
         vision_recalc(0);
+        in_pline = tmp_in_pline;
+    }
     if (u.ux)
         flush_screen((gp.pline_flags & NO_CURS_ON_U) ? 0 : 1); /* %% */
 
@@ -665,6 +670,7 @@ execplinehandler(const char *line)
         args[1] = line;
         args[2] = NULL;
         ret = _spawnv(_P_NOWAIT, sysopt.msghandler, args);
+        nhUse(ret);  /* -Wunused-but-set-variable */
     }
 #else
     use_pline_handler = FALSE;

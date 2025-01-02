@@ -97,6 +97,8 @@ GCC_EXTRA_WARNINGS = N
 #
 #==============================================================================
 
+$(info Using $(lastword $(MAKEFILE_LIST)))
+
 SKIP_NETHACKW = N
 USE_LUADLL = Y
 WANT_LUAC = N
@@ -339,13 +341,14 @@ ifeq "$(GCC_EXTRA_WARNINGS)" "Y"
 #
 # These match the warnings enabled on the linux.370 and macOS.370 hints builds
 #
-CFLAGSXTRA = -Wall -Wextra -Wreturn-type -Wunused -Wformat -Wswitch -Wshadow \
+CFLAGSXTRA = -Wall -Wextra -Wreturn-type -Wunused -Wswitch -Wshadow \
 	     -Wwrite-strings -pedantic -Wmissing-declarations \
-	     -Wformat-nonliteral -Wunreachable-code -Wimplicit \
+	     -Wunreachable-code -Wimplicit \
 	     -Wimplicit-function-declaration -Wimplicit-int \
 	     -Wmissing-prototypes -Wold-style-definition \
 	     -Wstrict-prototypes -Wnonnull -Wformat-overflow \
-	     -Wmissing-parameter-type -Wimplicit-fallthrough
+	     -Wmissing-parameter-type -Wimplicit-fallthrough \
+	     -Wno-cast-function-type -Wno-format
 
 CPPFLAGSXTRA = -Wall -Wextra -Wno-missing-field-initializers -Wreturn-type \
 		-Wunused -Wformat -Wswitch -Wshadow -Wwrite-strings -pedantic \
@@ -446,6 +449,7 @@ CLEAN_FILE += $(NHLUAH)
 LUALIST = air Arc-fila Arc-filb Arc-goal Arc-loca Arc-strt \
 	asmodeus astral baalz Bar-fila Bar-filb Bar-goal \
 	Bar-loca Bar-strt bigrm-1 bigrm-10 bigrm-11 bigrm-2 \
+	bigrm-12 \
 	bigrm-3 bigrm-4 bigrm-5 bigrm-6 bigrm-7 bigrm-8 \
 	bigrm-9 castle Cav-fila Cav-filb Cav-goal Cav-loca \
 	Cav-strt dungeon earth fakewiz1 fakewiz2 fire \

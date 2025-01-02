@@ -1334,6 +1334,9 @@ doname_base(
             Strcat(prefix, "uncursed ");
     }
 
+    /* "a large trapped box" would perhaps be more correct */
+    if (Is_box(obj) && obj->otrapped && obj->tknown && obj->dknown)
+        Strcat(prefix,"trapped ");
     if (lknown && Is_box(obj)) {
         if (obj->obroken)
             /* 3.6.0 used "unlockable" here but that could be misunderstood
@@ -3353,6 +3356,7 @@ static const struct alt_spellings {
     { "kelp", KELP_FROND },
     { "eucalyptus", EUCALYPTUS_LEAF },
     { "lembas", LEMBAS_WAFER },
+    { "tripe", TRIPE_RATION },
     { "cookie", FORTUNE_COOKIE },
     { "pie", CREAM_PIE },
     { "huge meatball", ENORMOUS_MEATBALL }, /* likely conflated name */
