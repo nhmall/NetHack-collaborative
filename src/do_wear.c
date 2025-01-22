@@ -1,4 +1,4 @@
-/* NetHack 3.7	do_wear.c	$NHDT-Date: 1727251255 2024/09/25 08:00:55 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.191 $ */
+/* NetHack 3.7	do_wear.c	$NHDT-Date: 1737343372 2025/01/19 19:22:52 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.201 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2012. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -196,8 +196,22 @@ Boots_on(void)
     case KICKING_BOOTS:
         break;
     case WATER_WALKING_BOOTS:
+        /*
+         * Sequencing issue?  If underwater (perhaps via magical breathing),
+         * putting on water walking boots produces "you slowly rise above
+         * the surface" then "you finish your dressing maneuver".
+         */
+
+        /* spoteffects() doesn't get called here; pooleffects() is called
+           during movement and u.uinwater is already False after setworn() */
         if (u.uinwater)
             spoteffects(TRUE);
+        /* init'd in accessory_or_armor_on() and only used here */
+        if (gw.wasinwater) {
+            if (!u.uinwater)
+                makeknown(WATER_WALKING_BOOTS);
+            gw.wasinwater = 0U;
+        }
         /* (we don't need a lava check here since boots can't be
            put on while feet are stuck) */
         break;
@@ -2338,6 +2352,7 @@ accessory_or_armor_on(struct obj *obj)
          *
         obj->known = 1;
          */
+        gw.wasinwater = u.uinwater; /* for WWALKING; Boots_on() is too late */
         setworn(obj, mask);
         /* if there's no delay, we'll execute 'afternmv' immediately */
         if (obj == uarm)
@@ -2367,6 +2382,8 @@ accessory_or_armor_on(struct obj *obj)
             on_msg(obj);
         }
         svc.context.takeoff.mask = svc.context.takeoff.what = 0L;
+        /* gw.wasinwater = 0U; // can't clear this yet; Boots_on() needs it
+         * and gets called via afternmv() after this routine has returned */
     } else { /* not armor */
         if (ring) {
             /* Ring_on() expects ring to already be worn as uleft or uright */
@@ -3000,7 +3017,7 @@ doddoremarm(void)
     if (flags.menu_style != MENU_TRADITIONAL
         || (result = ggetobj("take off", select_off, 0, FALSE,
                              (unsigned *) 0)) < -1)
-        result = menu_remarm(result);
+        (void) menu_remarm(result);
 
     if (svc.context.takeoff.mask) {
         (void) strncpy(svc.context.takeoff.disrobing,

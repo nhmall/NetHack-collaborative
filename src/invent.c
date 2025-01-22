@@ -1,4 +1,4 @@
-/* NetHack 3.7	invent.c	$NHDT-Date: 1724094299 2024/08/19 19:04:59 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.516 $ */
+/* NetHack 3.7	invent.c	$NHDT-Date: 1737384766 2025/01/20 06:52:46 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.531 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Derek S. Ray, 2015. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -1372,6 +1372,11 @@ freeinv_core(struct obj *obj)
         disp.botl = TRUE;
     } else if (obj->otyp == FIGURINE && obj->timed) {
         (void) stop_timer(FIG_TRANSFORM, obj_to_any(obj));
+    }
+
+    if (obj == svc.context.tin.tin) {
+        svc.context.tin.tin = (struct obj *) 0;
+        svc.context.tin.o_id = 0;
     }
 }
 
@@ -2799,7 +2804,7 @@ xprname(
     char suffix[80]; /* plenty of room for count and hallucinatory currency */
     int sfxlen, txtlen; /* signed int for %*s formatting */
     const char *fmt;
-    boolean use_invlet = (flags.invlet_constant
+    boolean use_invlet = (flags.invlet_constant && obj != NULL
                           && let != CONTAINED_SYM && let != HANDS_SYM);
     long savequan = 0L;
 
@@ -2814,8 +2819,10 @@ xprname(
      *  >  Then the object is contained and doesn't have an inventory letter.
      */
     fmt = "%c - %.*s%s";
-    if (!txt)
+    if (!txt) {
+        assert(obj != NULL);
         txt = doname(obj);
+    }
     txtlen = (int) strlen(txt);
 
     if (cost != 0L || let == '*') {
@@ -3627,11 +3634,10 @@ display_pickinv(
     Loot *sortedinvent, *srtinv;
     int8_t prevorderclass;
     boolean (*filter)(struct obj *) = (boolean (*)(OBJ_P)) 0;
-
     boolean wizid = (wizard && iflags.override_ID), gotsomething = FALSE;
     int clr = NO_COLOR, menu_behavior = MENU_BEHAVE_STANDARD;
     boolean show_gold = TRUE, inuse_only = FALSE, skipped_gold = FALSE,
-            doing_perm_invent = FALSE, save_flags_sortpack = flags.sortpack,
+            doing_perm_invent = FALSE, save_flags_sortpack,
             usextra = (xtra_choice && allowxtra);
 
     if (lets && !*lets)
@@ -4226,7 +4232,7 @@ dounpaid(
     }
 
     win = create_nhwindow(NHW_MENU);
-    cost = totcost = 0;
+    totcost = 0L;
     num_so_far = 0; /* count of # printed so far */
     if (!flags.invlet_constant)
         reassign();
@@ -4937,6 +4943,8 @@ mergable(
         return TRUE;
 
     if (obj->cursed != otmp->cursed || obj->blessed != otmp->blessed)
+        return FALSE;
+    if ((obj->how_lost & ~LOSTOVERRIDEMASK) != 0)
         return FALSE;
 #if 0   /* don't require 'bypass' to match; that results in items dropped
          * via 'D' not stacking with compatible items already on the floor;
@@ -6149,6 +6157,12 @@ sync_perminvent(void)
             || in_perm_invent_toggled) {
             wri = ctrl_nhwindow(WIN_INVEN, request_settings, &wri_info);
             if (wri != 0) {
+                if ((wri->tocore.tocore_flags & (too_early)) != 0) {
+                    /* don't be too noisy about this as it's really
+                     * a startup timing issue. Just set a marker. */
+                    iflags.perm_invent_pending = TRUE;
+                    return;
+                }
                 if ((wri->tocore.tocore_flags & (too_small | prohibited))
                     != 0) {
                     /* sizes aren't good enough */

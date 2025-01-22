@@ -1,4 +1,4 @@
-/* NetHack 3.7	sounds.c	$NHDT-Date: 1674548234 2023/01/24 08:17:14 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.134 $ */
+/* NetHack 3.7	sounds.c	$NHDT-Date: 1736530208 2025/01/10 09:30:08 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.165 $ */
 /*      Copyright (c) 1989 Janet Walz, Mike Threepoint */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -10,7 +10,6 @@ staticfn boolean morgue_mon_sound(struct monst *);
 staticfn boolean zoo_mon_sound(struct monst *);
 staticfn boolean temple_priest_sound(struct monst *);
 staticfn boolean mon_is_gecko(struct monst *);
-staticfn int domonnoise(struct monst *);
 staticfn int dochat(void);
 staticfn struct monst *responsive_mon_at(int, int);
 staticfn int mon_in_room(struct monst *, int);
@@ -675,7 +674,7 @@ mon_is_gecko(struct monst *mon)
 
 DISABLE_WARNING_FORMAT_NONLITERAL
 
-staticfn int /* check calls to this */
+int /* check calls to this */
 domonnoise(struct monst *mtmp)
 {
     char verbuf[BUFSZ];
@@ -1231,7 +1230,7 @@ domonnoise(struct monst *mtmp)
                and without quotation marks */
             char tmpbuf[BUFSZ];
             pline1(ucase(strcpy(tmpbuf, verbl_msg)));
-            SetVoice((struct monst *) 0, 0, 80, voice_death); 
+            SetVoice((struct monst *) 0, 0, 80, voice_death);
             sound_speak(tmpbuf);
         } else {
             SetVoice(mtmp, 0, 80, 0);
@@ -2170,14 +2169,14 @@ set_voice(
     if (gv.voice.nameid)
         free((genericptr_t) gv.voice.nameid);
     gv.voice.gender = gender;
-    gv.voice.serialno = mtmp ? mtmp->m_id 
+    gv.voice.serialno = mtmp ? mtmp->m_id
                              : ((moreinfo & voice_talking_artifact) != 0)  ? 3
                                  : ((moreinfo & voice_deity) != 0) ? 4 : 2;
     gv.voice.tone = tone;
     gv.voice.volume = volume;
     gv.voice.moreinfo = moreinfo;
     gv.voice.nameid = (const char *) 0;
-    gp.pline_flags |= PLINE_SPEECH; 
+    gp.pline_flags |= PLINE_SPEECH;
 #endif
 }
 
@@ -2214,7 +2213,7 @@ sound_speak(const char *text SPEECHONLY)
             *cpdst = '\0';
         }
         (*soundprocs.sound_verbal)(buf, gv.voice.gender, gv.voice.tone,
-                                   gv.voice.volume, gv.voice.moreinfo); 
+                                   gv.voice.volume, gv.voice.moreinfo);
     }
 #endif
 }

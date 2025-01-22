@@ -2035,8 +2035,11 @@ seffect_magic_mapping(struct obj **sobjp)
 
             for (x = 1; x < COLNO; x++)
                 for (y = 0; y < ROWNO; y++)
-                    if (levl[x][y].typ == SDOOR)
+                    if (levl[x][y].typ == SDOOR) {
                         cvt_sdoor_to_door(&levl[x][y]);
+                        if (Is_rogue_level(&u.uz))
+                            unblock_point(x, y);
+                    }
             /* do_mapping() already reveals secret passages */
         }
         gk.known = TRUE;
@@ -3234,9 +3237,9 @@ create_particular_creation(
             set_malign(mtmp);
         }
         if (d->saddled && can_saddle(mtmp) && !which_armor(mtmp, W_SADDLE)) {
-            struct obj *otmp = mksobj(SADDLE, TRUE, FALSE);
-
-            put_saddle_on_mon(otmp, mtmp);
+            /* NULL obj arg means put_saddle_on_mon()
+             * will create the saddle itself */
+            put_saddle_on_mon((struct obj *) 0, mtmp);
         }
         if (d->hidden
            && ((is_hider(mtmp->data) && mtmp->data->mlet != S_MIMIC)
