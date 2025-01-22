@@ -1,4 +1,4 @@
-/* NetHack 3.7	monmove.c	$NHDT-Date: 1722116054 2024/07/27 21:34:14 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.255 $ */
+/* NetHack 3.7	monmove.c	$NHDT-Date: 1737392015 2025/01/20 08:53:35 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.266 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Michael Allison, 2006. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -295,9 +295,8 @@ onscary(coordxy x, coordxy y, struct monst *mtmp)
 void
 mon_regen(struct monst *mon, boolean digest_meal)
 {
-    if (mon->mhp < mon->mhpmax
-        && (svm.moves % 20 == 0 || regenerates(mon->data)))
-        mon->mhp++;
+    if (svm.moves % 20 == 0 || regenerates(mon->data))
+        healmon(mon, 1, 0);
     if (mon->mspec_used)
         mon->mspec_used--;
     if (digest_meal) {
@@ -1472,6 +1471,7 @@ postmov(
             if (vamp_shift(mtmp, &mons[PM_FOG_CLOUD],
                            ((seenflgs & 1) != 0) ? TRUE : FALSE)) {
                 ptr = mtmp->data; /* update cached value */
+                nhUse(ptr);
             }
             if (seenflgs) {
                 remove_monster(omx, omy);
@@ -1502,7 +1502,7 @@ postmov(
     do {                                                        \
         (where)->doormask = (what);                             \
         newsym((who)->mx, (who)->my);                           \
-        unblock_point((who)->mx, (who)->my);                    \
+        recalc_block_point((who)->mx, (who)->my);               \
         vision_recalc(0);                                       \
         /* update cached value since it might change */         \
         canseeit = didseeit || cansee((who)->mx, (who)->my);    \

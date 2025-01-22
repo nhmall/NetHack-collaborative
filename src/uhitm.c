@@ -1,4 +1,4 @@
-/* NetHack 3.7	uhitm.c	$NHDT-Date: 1732979463 2024/11/30 07:11:03 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.451 $ */
+/* NetHack 3.7	uhitm.c	$NHDT-Date: 1736575153 2025/01/10 21:59:13 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.461 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2012. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -2813,7 +2813,7 @@ mhitm_ad_tlpt(
         int tmphp;
 
         hitmsg(magr, mattk);
-        if (!mhitm_mgc_atk_negated(magr, mdef, FALSE)) {
+        if (mhitm_mgc_atk_negated(magr, mdef, FALSE)) {
             You("are not affected.");
         } else {
             if (flags.verbose)
@@ -5931,9 +5931,7 @@ passive(
                 You("are suddenly very cold!");
                 mdamageu(mon, tmp);
                 /* monster gets stronger with your heat! */
-                mon->mhp += (tmp + rn2(2)) / 2;
-                if (mon->mhpmax < mon->mhp)
-                    mon->mhpmax = mon->mhp;
+                healmon(mon, (tmp + rn2(2)) / 2, (tmp + 1) / 2);
                 /* at a certain point, the monster will reproduce! */
                 if (mon->mhpmax > (((int) mon->m_lev) + 1) * 8)
                     (void) split_mon(mon, &gy.youmonst);
@@ -6070,18 +6068,22 @@ that_is_a_mimic(
         else if (M_AP_TYPE(mtmp) == M_AP_MONSTER)
             what = a_monnam(mtmp); /* differs from what was sensed */
     } else {
-        int glyph = levl[u.ux + u.dx][u.uy + u.dy].glyph;
+        coordxy x = u.ux + u.dx, y = u.uy + u.dy;
+        int glyph = glyph_at(x, y);
 
         if (glyph_is_cmap(glyph)) {
-            /* note: defsyms[stairs] yields singular "staircase {up|down}" */
-            Snprintf(fmtbuf, sizeof fmtbuf, "That %s actually is %%s!",
-                     defsyms[mtmp->mappearance].explanation);
+            int sym = glyph_to_cmap(glyph);
+
+            if (M_AP_TYPE(mtmp) == M_AP_FURNITURE
+                || (M_AP_TYPE(mtmp) == M_AP_OBJECT && sym == S_trapped_chest))
+                Snprintf(fmtbuf, sizeof fmtbuf, "That %s actually is %%s!",
+                         defsyms[sym].explanation);
         } else if (glyph_is_object(glyph)) {
             boolean fakeobj;
             const char *otmp_name;
             struct obj *otmp = NULL;
 
-            fakeobj = object_from_map(glyph, mtmp->mx, mtmp->my, &otmp);
+            fakeobj = object_from_map(glyph, x, y, &otmp);
             otmp_name = (otmp && otmp->otyp != STRANGE_OBJECT)
                         ? simpleonames(otmp) : "strange object";
             Snprintf(fmtbuf, sizeof fmtbuf, "%s %s %s %%s!",
@@ -6091,12 +6093,22 @@ that_is_a_mimic(
                 otmp->where = OBJ_FREE; /* object_from_map set to OBJ_FLOOR */
                 dealloc_obj(otmp);
             }
+        } else if (glyph_is_monster(glyph)) {
+            const char *mtmp_name;
+            int mndx = glyph_to_mon(glyph);
+
+            assert(mndx >= LOW_PM && mndx <= HIGH_PM);
+            mtmp_name = pmname(&mons[mndx], Mgender(mtmp));
+            Snprintf(fmtbuf, sizeof fmtbuf,
+                     "Wait!  That %s is really %%s!", mtmp_name);
         }
 
         /* cloned Wiz starts out mimicking some other monster and
            might make himself invisible before being revealed */
         if (mtmp->minvis && !See_invisible)
             what = generic;
+        else if (M_AP_TYPE(mtmp) == M_AP_MONSTER)
+            what = x_monnam(mtmp, ARTICLE_A, (char *) NULL, EXACT_NAME, TRUE);
         else if (mtmp->data->mlet == S_MIMIC
                  && (M_AP_TYPE(mtmp) == M_AP_OBJECT
                      || M_AP_TYPE(mtmp) == M_AP_FURNITURE)

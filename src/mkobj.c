@@ -1,4 +1,4 @@
-/* NetHack 3.7	mkobj.c	$NHDT-Date: 1725138481 2024/08/31 21:08:01 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.304 $ */
+/* NetHack 3.7	mkobj.c	$NHDT-Date: 1737528890 2025/01/21 22:54:50 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.315 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Derek S. Ray, 2015. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -2443,9 +2443,8 @@ remove_object(struct obj *otmp)
         panic("remove_object: obj not on floor");
     extract_nexthere(otmp, &svl.level.objects[x][y]);
     extract_nobj(otmp, &fobj);
-    /* update vision iff this was the only boulder at its spot */
-    if (otmp->otyp == BOULDER && !sobj_at(BOULDER, x, y))
-        unblock_point(x, y); /* vision */
+    if (otmp->otyp == BOULDER)
+        recalc_block_point(x, y); /* vision */
     if (otmp->timed)
         obj_timer_checks(otmp, x, y, 0);
 }
@@ -2674,6 +2673,8 @@ container_weight(struct obj *object)
 void
 dealloc_obj(struct obj *obj)
 {
+    if (obj->otyp == BOULDER)
+        obj->next_boulder = 0;
     if (obj->where == OBJ_DELETED) {
         impossible("dealloc_obj: obj already deleted (type=%d)", obj->otyp);
         return;
@@ -2711,6 +2712,10 @@ dealloc_obj(struct obj *obj)
         gt.thrownobj = 0;
     if (obj == gk.kickedobj)
         gk.kickedobj = 0;
+    if (obj == svc.context.tin.tin) {
+        svc.context.tin.tin = (struct obj *) 0;
+        svc.context.tin.o_id = 0;
+    }
 
     /* if obj came from the most recent splitobj(), it's no longer eligible
        for unsplitobj(); perform inline clear_splitobjs() */
