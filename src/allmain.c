@@ -201,6 +201,7 @@ moveloop_core(void)
                 struct monst *mtmp;
 
                 /* set up for a new turn */
+                gw.were_changes = 0L;
                 mcalcdistress(); /* adjust monsters' trap, blind, etc */
 
                 /* reallocate movement rations to monsters; don't need
@@ -324,6 +325,10 @@ moveloop_core(void)
                     (void) dosearch0(1);
                 if (Warning)
                     warnreveal();
+                if (gw.were_changes) {
+                    /* update innate intrinsics (mainly Drain_resistance) */
+                    set_uasmon();
+                }
                 mkot_trap_warn();
                 dosounds();
                 do_storms();
